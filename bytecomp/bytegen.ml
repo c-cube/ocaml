@@ -449,7 +449,7 @@ let rec comp_expr env exp sz cont =
       end
   | Lconst cst ->
       Kconst cst :: cont
-  | Lapply(func, args, loc) ->
+  | Lapply(func, args, info) ->
       let nargs = List.length args in
       if is_tailcall cont then begin
         comp_args env args sz
@@ -565,7 +565,7 @@ let rec comp_expr env exp sz cont =
       comp_expr env arg sz (add_const_unit cont)
   | Lprim(Pdirapply loc, [func;arg])
   | Lprim(Prevapply loc, [arg;func]) ->
-      let exp = Lapply(func, [arg], loc) in
+      let exp = Lapply(func, [arg], mk_apply_info loc) in
       comp_expr env exp sz cont
   | Lprim(Pnot, [arg]) ->
       let newcont =
