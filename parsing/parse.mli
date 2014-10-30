@@ -19,3 +19,8 @@ val use_file : Lexing.lexbuf -> Parsetree.toplevel_phrase list
 val core_type : Lexing.lexbuf -> Parsetree.core_type
 val expression : Lexing.lexbuf -> Parsetree.expression
 val pattern : Lexing.lexbuf -> Parsetree.pattern
+
+(** Syntactic transformations *)
+val unsugar_mapper : Ast_mapper.mapper
+val unsugar_interface : Parsetree.signature -> Parsetree.signature
+val unsugar_implementation : Parsetree.structure -> Parsetree.structure

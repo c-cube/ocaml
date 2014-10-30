@@ -60,3 +60,25 @@ and use_file = wrap Parser.use_file
 and core_type = wrap Parser.parse_core_type
 and expression = wrap Parser.parse_expression
 and pattern = wrap Parser.parse_pattern
+
+open Parsetree
+open Asttypes
+open Ast_helper
+open Ast_mapper
+
+let unsugar_mapper = {
+  default_mapper with
+  expr=(fun mapper e ->
+    match e.pexp_desc with
+    | Pexp_extension ({txt="tailcall";loc},
+                      PStr [{pstr_desc=Pstr_eval (e',[])}]) ->
+        (* change  [%tailcall e] into e [@tailcall] *)
+        let attribute = {txt="tailcall";loc}, PStr [] in
+        Exp.attr (mapper.expr mapper e') attribute
+    | _ -> default_mapper.expr mapper e
+  );
+}
+
+let unsugar_interface = unsugar_mapper.signature unsugar_mapper
+let unsugar_implementation = unsugar_mapper.structure unsugar_mapper
+

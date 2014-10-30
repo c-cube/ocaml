@@ -32,6 +32,7 @@ let interface ppf sourcefile outputprefix =
   let ast = Pparse.parse_interface ~tool_name ppf sourcefile in
   if !Clflags.dump_parsetree then fprintf ppf "%a@." Printast.interface ast;
   if !Clflags.dump_source then fprintf ppf "%a@." Pprintast.signature ast;
+  let ast = Parse.unsugar_interface ast in
   let tsg = Typemod.type_interface initial_env ast in
   if !Clflags.dump_typedtree then fprintf ppf "%a@." Printtyped.interface tsg;
   let sg = tsg.sig_type in
@@ -71,6 +72,7 @@ let implementation ppf sourcefile outputprefix =
       ast
       ++ print_if ppf Clflags.dump_parsetree Printast.implementation
       ++ print_if ppf Clflags.dump_source Pprintast.structure
+      ++ Parse.unsugar_implementation
       ++ Typemod.type_implementation sourcefile outputprefix modulename env
       ++ print_if ppf Clflags.dump_typedtree
           Printtyped.implementation_with_coercion
@@ -79,6 +81,7 @@ let implementation ppf sourcefile outputprefix =
       ast
       ++ print_if ppf Clflags.dump_parsetree Printast.implementation
       ++ print_if ppf Clflags.dump_source Pprintast.structure
+      ++ Parse.unsugar_implementation
       ++ Typemod.type_implementation sourcefile outputprefix modulename env
       ++ print_if ppf Clflags.dump_typedtree
           Printtyped.implementation_with_coercion
