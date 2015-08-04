@@ -355,6 +355,18 @@ let rec emit = function
       emit (Kpush :: instr :: ev :: c)
   | Kgetglobal id :: Kgetfield n :: c ->
       out opGETGLOBALFIELD; slot_for_getglobal id; out_int n; emit c
+  (* double negation *)
+  | Kboolnot :: Kbranchifnot l :: c -> emit (Kbranchif l :: c)
+  (* push then pop --> pop *)
+  | Kpush :: Kpop 1 :: c -> emit c
+  | Kpush :: Kpop n :: c -> emit (Kpop (n-1) :: c)
+  (* redundant setting of acc. The first instruction must have as only
+     side effect the modification of acc; the second one must modify acc without
+     reading it *)
+  | (Kacc _ | Kenvacc _ | Kconst _ | Kgetfield _ | Kgetvectitem
+    | Knegint | Kisint | Kgetdynmet)
+    ::
+    (( (Kconst _ | Kenvacc _ | Kacc _) :: _) as c) -> emit c
   (* Default case *)
   | instr :: c ->
       emit_instr instr; emit c
