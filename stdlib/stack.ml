@@ -42,3 +42,14 @@ let length s = s.len
 let iter f s = List.iter f s.c
 
 let fold f acc s = List.fold_left f acc s.c
+
+(** {6 Iterators} *)
+
+type 'a cursor = 'a list
+
+let cursor_start s = s.c
+
+let cursor_next = function
+  | [] -> None
+  | x :: tail -> Some (x,tail)
+

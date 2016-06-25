@@ -332,6 +332,32 @@ let stats h =
     max_bucket_length = mbl;
     bucket_histogram = histo }
 
+(** {6 Iterators} *)
+
+type ('a,'b) cursor = {
+  c_tbl: ('a,'b) t;
+  c_cur: int; (* next bucketlist to traverse *)
+  c_bucket: ('a,'b) bucketlist;
+}
+
+let cursor_start tbl =
+  { c_tbl=tbl; c_cur=0; c_bucket=Empty; }
+
+let rec cursor_next c = match c.c_bucket with
+  | Empty ->
+      if c.c_cur = Array.length c.c_tbl.data then None
+      else
+        let c' =
+          { c with
+              c_bucket=c.c_tbl.data.(c.c_cur);
+              c_cur = c.c_cur+1;
+          }
+        in
+        cursor_next c'
+  | Cons {key; data; next} ->
+      let c' = {c with c_bucket=next} in
+      Some (key, data, c')
+
 (* Functorial interface *)
 
 module type HashedType =
@@ -369,6 +395,14 @@ module type S =
     val stats: 'a t -> statistics
   end
 
+module type FULL =
+  sig
+    include S
+    type 'a cursor
+    val cursor_start : 'a t -> 'a cursor
+    val cursor_next : 'a cursor -> (key * 'a * 'a cursor) option
+  end
+
 module type SeededS =
   sig
     type key
@@ -390,7 +424,15 @@ module type SeededS =
     val stats: 'a t -> statistics
   end
 
-module MakeSeeded(H: SeededHashedType): (SeededS with type key = H.t) =
+module type SeededSFull =
+  sig
+    include SeededS
+    type 'a cursor
+    val cursor_start : 'a t -> 'a cursor
+    val cursor_next : 'a cursor -> (key * 'a * 'a cursor) option
+  end
+
+module MakeSeeded(H: SeededHashedType): (SeededSFull with type key = H.t) =
   struct
     type key = H.t
     type 'a hashtbl = (key, 'a) t
@@ -487,9 +529,12 @@ module MakeSeeded(H: SeededHashedType): (SeededS with type key = H.t) =
     let fold = fold
     let length = length
     let stats = stats
+    type nonrec 'a cursor = (key, 'a) cursor
+    let cursor_start = cursor_start
+    let cursor_next = cursor_next
   end
 
-module Make(H: HashedType): (S with type key = H.t) =
+module Make(H: HashedType): (FULL with type key = H.t) =
   struct
     include MakeSeeded(struct
         type t = H.t

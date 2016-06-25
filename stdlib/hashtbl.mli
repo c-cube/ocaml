@@ -212,6 +212,19 @@ val stats : ('a, 'b) t -> statistics
    buckets by size.
    @since 4.00.0 *)
 
+(** {6 Iterators} *)
+
+type ('a,'b) cursor
+
+val cursor_start : ('a,'b) t -> ('a, 'b) cursor
+(** Iterate on the whole table, in unspecified order
+    @since NEXT_RELEASE *)
+
+val cursor_next : ('a,'b) cursor -> ('a * 'b * ('a,'b) cursor) option
+(** [cursor_next c] returns the next element and a new cursor
+    that is positioned just after this element
+    @since NEXT_RELEASE *)
+
 (** {6 Functorial interface} *)
 
 (** The functorial interface allows the use of specific comparison
@@ -287,9 +300,17 @@ module type S =
     val length : 'a t -> int
     val stats: 'a t -> statistics
   end
-(** The output signature of the functor {!Hashtbl.Make}. *)
+(** The core output signature of the functor {!Hashtbl.Make}. *)
 
-module Make (H : HashedType) : S with type key = H.t
+module type FULL =
+  sig
+    include S
+    type 'a cursor
+    val cursor_start : 'a t -> 'a cursor
+    val cursor_next : 'a cursor -> (key * 'a * 'a cursor) option
+  end
+
+module Make (H : HashedType) : FULL with type key = H.t
 (** Functor building an implementation of the hashtable structure.
     The functor [Hashtbl.Make] returns a structure containing
     a type [key] of keys and a type ['a t] of hash tables
@@ -339,10 +360,20 @@ module type SeededS =
     val length : 'a t -> int
     val stats: 'a t -> statistics
   end
-(** The output signature of the functor {!Hashtbl.MakeSeeded}.
+(** The core output signature of the functor {!Hashtbl.MakeSeeded}.
     @since 4.00.0 *)
 
-module MakeSeeded (H : SeededHashedType) : SeededS with type key = H.t
+module type SeededSFull =
+  sig
+    include SeededS
+    type 'a cursor
+    val cursor_start : 'a t -> 'a cursor
+    val cursor_next : 'a cursor -> (key * 'a * 'a cursor) option
+  end
+(** The full output signature of the functor {!Hashtbl.MakeSeeded}.
+    @since NEXT_RELEASE *)
+
+module MakeSeeded (H : SeededHashedType) : SeededSFull with type key = H.t
 (** Functor building an implementation of the hashtable structure.
     The functor [Hashtbl.MakeSeeded] returns a structure containing
     a type [key] of keys and a type ['a t] of hash tables

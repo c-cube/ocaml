@@ -49,6 +49,10 @@ module type S =
     val find: key -> 'a t -> 'a
     val map: ('a -> 'b) -> 'a t -> 'b t
     val mapi: (key -> 'a -> 'b) -> 'a t -> 'b t
+    type 'a cursor
+    val cursor_start : 'a t -> 'a cursor
+    val cursor_start_range : ?low:key -> ?high:key -> 'a t -> 'a cursor
+    val cursor_next : 'a cursor -> (key * 'a * 'a cursor) option
   end
 
 module Make(Ord: OrderedType) = struct
@@ -356,4 +360,42 @@ module Make(Ord: OrderedType) = struct
 
     let choose = min_binding
 
+    type 'a cursor_action =
+      | Act_yield of key * 'a
+      | Act_explore of 'a t
+
+    type 'a cursor = {
+      low: key option;
+      high: key option;
+      stack: 'a cursor_action list;
+    }
+
+    let cursor_start s =
+      { low=None; high=None; stack=[Act_explore s]; }
+
+    let cursor_start_range ?low ?high s =
+      { low; high; stack=[Act_explore s]; }
+
+    let rec cursor_next c = match c.stack with
+      | [] -> None
+      | head :: tail ->
+          let c' = { c with stack=tail } in
+          match head with
+            | Act_yield (k,v) -> Some (k,v,c')
+            | Act_explore Empty -> cursor_next c'
+            | Act_explore (Node (l, k, v, r, _)) ->
+                let cmp_low = match c'.low with
+                  | None -> 1 (* - infinity *)
+                  | Some l -> Ord.compare l k
+                and cmp_high = match c'.high with
+                  | None -> -1 (* + infinity *)
+                  | Some h -> Ord.compare k h
+                in
+                let stack = c'.stack in
+                let stack =
+                  if cmp_high < 0 then Act_explore r :: stack else stack in
+                let stack =
+                  if cmp_low >= 0 && cmp_high < 0 then Act_yield (k,v) :: stack else stack in
+                let stack = if cmp_low > 0 then Act_explore l :: stack else stack in
+                cursor_next {c' with stack}
 end

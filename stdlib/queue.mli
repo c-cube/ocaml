@@ -80,3 +80,18 @@ val transfer : 'a t -> 'a t -> unit
    the queue [q2], then clears [q1]. It is equivalent to the
    sequence [iter (fun x -> add x q2) q1; clear q1], but runs
    in constant time. *)
+
+(** {6 Iterators} *)
+
+type 'a cursor
+(** Cursor to iterate over elements
+    @since NEXT_RELEASE *)
+
+val cursor_start : 'a t -> 'a cursor
+(** Iterate on values, in queue order
+    @since NEXT_RELEASE *)
+
+val cursor_next : 'a cursor -> ('a * 'a cursor) option
+(** [cursor_next c] returns the next element and a new cursor
+    that is positioned just after this element
+    @since NEXT_RELEASE *)

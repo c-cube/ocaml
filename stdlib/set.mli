@@ -197,6 +197,27 @@ module type S =
         This is usually more efficient than folding [add] over the list,
         except perhaps for lists with many duplicated elements.
         @since 4.02.0 *)
+
+    (** {6 Iterators} *)
+
+    type cursor
+    (** A cursor iterating over elements
+        @since NEXT_RELEASE *)
+
+    val cursor_start : t -> cursor
+    (** Start iterating over all the elements
+        @since NEXT_RELEASE *)
+
+    val cursor_start_range : ?low:elt -> ?high:elt -> t -> cursor
+    (** [cursor_start_range ?low ?high s] iterates on a subset of the elements of [s],
+        in ascending order.
+        @param low if set, only elements [>= low] will be yield
+        @param high if set, only elements [< high] will be yield
+        @since NEXT_RELEASE *)
+
+    val cursor_next : cursor -> (elt * cursor) option
+    (** Next element and cursor
+        @since NEXT_RELEASE *)
   end
 (** Output signature of the functor {!Set.Make}. *)
 

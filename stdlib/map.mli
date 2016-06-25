@@ -223,7 +223,27 @@ module type S =
     (** Same as {!Map.S.map}, but the function receives as arguments both the
        key and the associated value for each binding of the map. *)
 
+    (** {6 Iterators} *)
 
+    type 'a cursor
+    (** Cursor to iterate over bindings
+        @since NEXT_RELEASE *)
+
+    val cursor_start : 'a t -> 'a cursor
+    (** Iterate on values, in ascending order of their corresponding key
+        @since NEXT_RELEASE *)
+
+    val cursor_start_range : ?low:key -> ?high:key -> 'a t -> 'a cursor
+    (** [cursor_start_range ?low ?high s] iterates on a subset of the bindings of [m],
+        in ascending order.
+        @param low if set, only elements [>= low] will be yield
+        @param high if set, only elements [< high] will be yield
+        @since NEXT_RELEASE *)
+
+    val cursor_next : 'a cursor -> (key * 'a * 'a cursor) option
+    (** [cursor_next c] returns the next element and a new cursor
+        that is positioned just after this element
+        @since NEXT_RELEASE *)
   end
 (** Output signature of the functor {!Map.Make}. *)
 

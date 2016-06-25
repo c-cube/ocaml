@@ -131,3 +131,17 @@ val add_channel : t -> in_channel -> int -> unit
 val output_buffer : out_channel -> t -> unit
 (** [output_buffer oc b] writes the current contents of buffer [b]
    on the output channel [oc]. *)
+
+
+(** {6 Iterators} *)
+
+type cursor
+(** @since NEXT_RELEASE *)
+
+val cursor_start : t -> cursor
+(** Iterate on the buffer, in increasing order
+    @since NEXT_RELEASE *)
+
+val cursor_next : cursor -> (char * cursor) option
+(** Next element in the cursor
+    @since NEXT_RELEASE *)

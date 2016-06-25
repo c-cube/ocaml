@@ -188,3 +188,19 @@ let add_substitute b f s =
     end else
     if previous = '\\' then add_char b previous in
   subst ' ' 0
+
+(** {6 Iterators} *)
+
+type cursor = {
+  c_buf: t;
+  c_next: int;
+}
+
+let cursor_start b = { c_buf=b; c_next=0; }
+
+let cursor_next c =
+  if c.c_next = c.c_buf.position then None
+  else
+    let c' = {c with c_next = c.c_next + 1; } in
+    Some (Bytes.get c.c_buf.buffer c.c_next, c')
+

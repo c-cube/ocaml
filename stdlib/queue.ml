@@ -130,3 +130,14 @@ let transfer q1 q2 =
       last.next <- q1.first;
       q2.last <- q1.last;
       clear q1
+
+(** {6 Iterators} *)
+
+type 'a cursor = 'a cell
+
+let cursor_start q = q.first
+
+let cursor_next c = match c with
+    | Nil -> None
+    | Cons { content=x; next; } -> Some (x, next)
+

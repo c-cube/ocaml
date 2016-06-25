@@ -45,6 +45,9 @@ module Hashtbl : sig
   val randomize : unit -> unit
   type statistics = Hashtbl.statistics
   val stats : ('a, 'b) t -> statistics
+  type ('a,'b) cursor
+  val cursor_start : ('a,'b) t -> ('a, 'b) cursor
+  val cursor_next : ('a,'b) cursor -> ('a * 'b * ('a,'b) cursor) option
   module type HashedType = Hashtbl.HashedType
   module type SeededHashedType = Hashtbl.SeededHashedType
   module type S =
@@ -70,6 +73,13 @@ module Hashtbl : sig
       val length : 'a t -> int
       val stats: 'a t -> statistics
     end
+  module type FULL =
+    sig
+      include S
+      type 'a cursor
+      val cursor_start : 'a t -> 'a cursor
+      val cursor_next : 'a cursor -> (key * 'a * 'a cursor) option
+    end
   module type SeededS =
     sig
       type key
@@ -93,8 +103,15 @@ module Hashtbl : sig
       val length : 'a t -> int
       val stats: 'a t -> statistics
     end
-  module Make : functor (H : HashedType) -> S with type key = H.t
-  module MakeSeeded (H : SeededHashedType) : SeededS with type key = H.t
+  module type SeededSFull =
+    sig
+      include SeededS
+      type 'a cursor
+      val cursor_start : 'a t -> 'a cursor
+      val cursor_next : 'a cursor -> (key * 'a * 'a cursor) option
+    end
+  module Make : functor (H : HashedType) -> FULL with type key = H.t
+  module MakeSeeded (H : SeededHashedType) : SeededSFull with type key = H.t
   val hash : 'a -> int
   val seeded_hash : int -> 'a -> int
   val hash_param : int -> int -> 'a -> int
@@ -135,6 +152,10 @@ module Map : sig
       val find : key -> 'a t -> 'a
       val map : f:('a -> 'b) -> 'a t -> 'b t
       val mapi : f:(key -> 'a -> 'b) -> 'a t -> 'b t
+      type 'a cursor
+      val cursor_start : 'a t -> 'a cursor
+      val cursor_start_range : ?low:key -> ?high:key -> 'a t -> 'a cursor
+      val cursor_next : 'a cursor -> (key * 'a * 'a cursor) option
   end
   module Make : functor (Ord : OrderedType) -> S with type key = Ord.t
 end
@@ -172,6 +193,10 @@ module Set : sig
       val split: elt -> t -> t * bool * t
       val find: elt -> t -> elt
       val of_list: elt list -> t
+      type cursor
+      val cursor_start : t -> cursor
+      val cursor_start_range : ?low:elt -> ?high:elt -> t -> cursor
+      val cursor_next : cursor -> (elt * cursor) option
     end
   module Make : functor (Ord : OrderedType) -> S with type elt = Ord.t
 end

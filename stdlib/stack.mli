@@ -61,3 +61,18 @@ val fold : ('b -> 'a -> 'b) -> 'b -> 'a t -> 'b
     where [x1] is the top of the stack, [x2] the second element,
     and [xn] the bottom element. The stack is unchanged.
     @since 4.03 *)
+
+(** {6 Iterators} *)
+
+type 'a cursor
+(** Cursor to iterate over elements
+    @since NEXT_RELEASE *)
+
+val cursor_start : 'a t -> 'a cursor
+(** Iterate on values, in top-to-bottom order
+    @since NEXT_RELEASE *)
+
+val cursor_next : 'a cursor -> ('a * 'a cursor) option
+(** [cursor_next c] returns the next element and a new cursor
+    that is positioned just after this element
+    @since NEXT_RELEASE *)

@@ -52,6 +52,10 @@ module type S =
     val split: elt -> t -> t * bool * t
     val find: elt -> t -> elt
     val of_list: elt list -> t
+    type cursor
+    val cursor_start : t -> cursor
+    val cursor_start_range : ?low:elt -> ?high:elt -> t -> cursor
+    val cursor_next : cursor -> (elt * cursor) option
   end
 
 module Make(Ord: OrderedType) =
@@ -418,4 +422,43 @@ module Make(Ord: OrderedType) =
       | [x0; x1; x2; x3] -> add x3 (add x2 (add x1 (singleton x0)))
       | [x0; x1; x2; x3; x4] -> add x4 (add x3 (add x2 (add x1 (singleton x0))))
       | _ -> of_sorted_list (List.sort_uniq Ord.compare l)
+
+    type cursor_action =
+      | Act_yield of elt
+      | Act_explore of t
+
+    type cursor = {
+      low: elt option;
+      high: elt option;
+      stack: cursor_action list;
+    }
+
+    let cursor_start s =
+      { low=None; high=None; stack=[Act_explore s]; }
+
+    let cursor_start_range ?low ?high s =
+      { low; high; stack=[Act_explore s]; }
+
+    let rec cursor_next c = match c.stack with
+      | [] -> None
+      | head :: tail ->
+          let c' = { c with stack=tail } in
+          match head with
+            | Act_yield x -> Some (x,c')
+            | Act_explore Empty -> cursor_next c'
+            | Act_explore (Node (l, x, r, _)) ->
+                let cmp_low = match c'.low with
+                  | None -> 1 (* - infinity *)
+                  | Some l -> Ord.compare l x
+                and cmp_high = match c'.high with
+                  | None -> -1 (* + infinity *)
+                  | Some h -> Ord.compare x h
+                in
+                let stack = c'.stack in
+                let stack =
+                  if cmp_high < 0 then Act_explore r :: stack else stack in
+                let stack =
+                  if cmp_low >= 0 && cmp_high < 0 then Act_yield x :: stack else stack in
+                let stack = if cmp_low > 0 then Act_explore l :: stack else stack in
+                cursor_next {c' with stack}
   end
