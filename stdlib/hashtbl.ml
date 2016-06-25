@@ -385,7 +385,7 @@ let add_list tbl l = List.iter (fun (k,v) -> add tbl k v) l
 let replace_list tbl l = List.iter (fun (k,v) -> replace tbl k v) l
 
 let of_list l =
-  let tbl = create 16 in
+  let tbl = create (List.length l) in
   replace_list tbl l;
   tbl
 

@@ -224,7 +224,7 @@ let of_gen g =
   b
 
 let of_list l =
-  let b = create 32 in
+  let b = create (List.length l) in
   List.iter (add_char b) l;
   b
 
