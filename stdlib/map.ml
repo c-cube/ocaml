@@ -379,17 +379,22 @@ module Make(Ord: OrderedType) = struct
 
     let of_gen g = add_gen empty g
 
+    type 'a to_gen_action =
+      | Act_yield of key * 'a
+      | Act_explore of 'a t
+
     let to_gen m =
-      let st = ref [m] in
+      let st = ref [Act_explore m] in
       let rec next() = match !st with
       | [] -> None
       | head :: tail ->
           st := tail;
           match head with
-          | Empty -> next ()
-          | Node (l, k, v, r, _) ->
-              st := l :: r :: !st;
-              Some (k,v)
+          | Act_yield (k,v) -> Some (k,v)
+          | Act_explore Empty -> next ()
+          | Act_explore (Node (l, k, v, r, _)) ->
+              st := Act_explore l :: Act_yield (k,v) :: Act_explore r :: !st;
+              next ()
       in next
 
     let to_gen_keys m =
@@ -405,14 +410,15 @@ module Make(Ord: OrderedType) = struct
         | Some (_,v) -> Some v
 
     let to_gen_range ?low ?high m =
-      let st = ref [m] in
+      let st = ref [Act_explore m] in
       let rec next() = match !st with
       | [] -> None
       | head :: tail ->
           st := tail;
           match head with
-          | Empty -> next ()
-          | Node (l, k, v, r, _) ->
+          | Act_yield (k,v) -> Some (k,v)
+          | Act_explore Empty -> next ()
+          | Act_explore (Node (l, k, v, r, _)) ->
               let cmp_low = match low with
                 | None -> 1 (* - infinity *)
                 | Some l -> Ord.compare l k
@@ -420,10 +426,9 @@ module Make(Ord: OrderedType) = struct
                 | None -> -1 (* + infinity *)
                 | Some h -> Ord.compare k h
               in
-              if cmp_high < 0 then st := r :: !st;
-              if cmp_low > 0 then st := l :: !st;
-              if cmp_low >= 0 && cmp_high <= 0
-              then Some (k,v)
-              else next ()
+              if cmp_high < 0 then st := Act_explore r :: !st;
+              if cmp_low >= 0 && cmp_high <= 0 then st := Act_yield(k,v) :: !st;
+              if cmp_low > 0 then st := Act_explore l :: !st;
+              next ()
       in next
 end

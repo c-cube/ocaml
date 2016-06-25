@@ -437,28 +437,34 @@ module Make(Ord: OrderedType) =
 
     let of_gen g = add_gen empty g
 
+    type to_gen_action =
+      | Act_yield of elt
+      | Act_explore of t
+
     let to_gen s =
-      let st = ref [s] in
+      let st = ref [Act_explore s] in
       let rec next() = match !st with
         | [] -> None
         | head :: tail ->
           st := tail;
           match head with
-          | Empty -> next ()
-          | Node (l, x, r, _) ->
-              st := l :: r :: !st;
-              Some x
+          | Act_explore Empty -> next ()
+          | Act_yield x -> Some x
+          | Act_explore (Node (l, x, r, _)) ->
+              st := Act_explore l :: Act_yield x :: Act_explore r :: !st;
+              next ()
       in next
 
     let to_gen_range ?low ?high s =
-      let st = ref [s] in
+      let st = ref [Act_explore s] in
       let rec next() = match !st with
         | [] -> None
         | head :: tail ->
           st := tail;
           match head with
-          | Empty -> next ()
-          | Node (l, x, r, _) ->
+          | Act_yield x -> Some x
+          | Act_explore Empty -> next ()
+          | Act_explore (Node (l, x, r, _)) ->
               let cmp_low = match low with
                 | None -> 1 (* - infinity *)
                 | Some l -> Ord.compare l x
@@ -466,10 +472,9 @@ module Make(Ord: OrderedType) =
                 | None -> -1 (* + infinity *)
                 | Some h -> Ord.compare x h
               in
-              if cmp_high < 0 then st := r :: !st;
-              if cmp_low > 0 then st := l :: !st;
-              if cmp_low >= 0 && cmp_high <= 0
-              then Some x
-              else next ()
+              if cmp_high < 0 then st := Act_explore r :: !st;
+              if cmp_low >= 0 && cmp_high <= 0 then st := Act_yield x :: !st;
+              if cmp_low > 0 then st := Act_explore l :: !st;
+              next ()
       in next
   end
