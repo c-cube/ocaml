@@ -47,6 +47,16 @@ module Hashtbl : sig
   val randomize : unit -> unit
   type statistics = Hashtbl.statistics
   val stats : ('a, 'b) t -> statistics
+  val to_gen : ('a,'b) t -> ('a * 'b) gen
+  val to_gen_keys : ('a,_) t -> 'a gen
+  val to_gen_values : (_,'b) t -> 'b gen
+  val add_gen : ('a,'b) t -> ('a * 'b) gen -> unit
+  val replace_gen : ('a,'b) t -> ('a * 'b) gen -> unit
+  val of_gen : ('a * 'b) gen -> ('a, 'b) t
+  val to_list : ('a, 'b) t -> ('a * 'b) list
+  val add_list : ('a, 'b) t -> ('a * 'b) list -> unit
+  val replace_list : ('a, 'b) t -> ('a * 'b) list -> unit
+  val of_list : ('a * 'b) list -> ('a, 'b) t
   module type HashedType = Hashtbl.HashedType
   module type SeededHashedType = Hashtbl.SeededHashedType
   module type S =
