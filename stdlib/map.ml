@@ -19,6 +19,8 @@ module type OrderedType =
     val compare: t -> t -> int
   end
 
+type 'a gen = unit -> 'a option
+
 module type S =
   sig
     type key
@@ -49,6 +51,15 @@ module type S =
     val find: key -> 'a t -> 'a
     val map: ('a -> 'b) -> 'a t -> 'b t
     val mapi: (key -> 'a -> 'b) -> 'a t -> 'b t
+    val to_gen : 'a t -> (key * 'a) gen
+    val to_gen_keys : _ t -> key gen
+    val to_gen_values : 'a t -> 'a gen
+    val to_gen_range : ?low:key -> ?high:key -> 'a t -> (key * 'a) gen
+    val add_gen : 'a t -> (key * 'a) gen -> 'a t
+    val of_gen : (key * 'a) gen -> 'a t
+    val to_list : 'a t -> (key * 'a) list
+    val add_list : 'a t -> (key * 'a) list -> 'a t
+    val of_list : (key * 'a) list -> 'a t
   end
 
 module Make(Ord: OrderedType) = struct
@@ -356,4 +367,63 @@ module Make(Ord: OrderedType) = struct
 
     let choose = min_binding
 
+    let add_list m l = List.fold_left (fun acc (k,v) -> add k v acc) m l
+
+    let of_list l = add_list empty l
+
+    let to_list m = fold (fun k v acc -> (k,v) :: acc) m []
+
+    let rec add_gen m g = match g() with
+      | None -> m
+      | Some (k,v) -> add_gen (add k v m) g
+
+    let of_gen g = add_gen empty g
+
+    let to_gen m =
+      let st = ref [m] in
+      let rec next() = match !st with
+      | [] -> None
+      | head :: tail ->
+          st := tail;
+          match head with
+          | Empty -> next ()
+          | Node (l, k, v, r, _) ->
+              st := l :: r :: !st;
+              Some (k,v)
+      in next
+
+    let to_gen_keys m =
+      let g = to_gen m in
+      fun () -> match g() with
+        | None -> None
+        | Some (k,_) -> Some k
+
+    let to_gen_values m =
+      let g = to_gen m in
+      fun () -> match g() with
+        | None -> None
+        | Some (_,v) -> Some v
+
+    let to_gen_range ?low ?high m =
+      let st = ref [m] in
+      let rec next() = match !st with
+      | [] -> None
+      | head :: tail ->
+          st := tail;
+          match head with
+          | Empty -> next ()
+          | Node (l, k, v, r, _) ->
+              let cmp_low = match low with
+                | None -> 1 (* - infinity *)
+                | Some l -> Ord.compare l k
+              and cmp_high = match high with
+                | None -> -1 (* + infinity *)
+                | Some h -> Ord.compare k h
+              in
+              if cmp_high < 0 then st := r :: !st;
+              if cmp_low > 0 then st := l :: !st;
+              if cmp_low >= 0 && cmp_high <= 0
+              then Some (k,v)
+              else next ()
+      in next
 end

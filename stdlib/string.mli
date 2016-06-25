@@ -282,6 +282,30 @@ val equal: t -> t -> bool
 (** The equal function for strings.
     @since 4.03.0 *)
 
+(** {6 Iterators} *)
+
+type 'a gen = unit -> 'a option
+
+val to_gen : t -> char gen
+(** Iterate on the string , in increasing order
+    @since NEXT_RELEASE *)
+
+val to_gen_i : t -> (int * char) gen
+(** Iterate on the string, in increasing order, yielding indices along chars
+    @since NEXT_RELEASE *)
+
+val of_gen : char gen -> t
+(** Create a string from the generator
+    @since NEXT_RELEASE *)
+
+val of_list : char list -> t
+(** build from a list of chars
+    @since NEXT_RELEASE *)
+
+val to_list : t -> char list
+(** Get a list of chars
+    @since NEXT_RELEASE *)
+
 (**/**)
 
 (* The following is for system use only. Do not call directly. *)

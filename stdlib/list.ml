@@ -430,3 +430,38 @@ let sort_uniq cmp l =
   in
   let len = length l in
   if len < 2 then l else sort len l
+
+(** {6 Iterators} *)
+
+type 'a gen = unit -> 'a option
+
+let to_gen l =
+  let l = ref l in
+  fun () ->
+    match !l with
+    | [] -> None
+    | x::l' -> l := l'; Some x
+
+let of_gen g =
+  let rec direct i g =
+    if i = 0 then safe [] g
+    else match g () with
+      | None -> []
+      | Some x -> x :: direct (i-1) g
+  (* tail-recursive *)
+  and safe acc g = match g () with
+    | None -> rev acc
+    | Some x -> safe (x::acc) g
+  in
+  direct 1000 g
+
+let range i j =
+  let rec up i j acc =
+    if i=j then j::acc else up i (j-1) (j::acc)
+  and down i j acc =
+    if i=j then j::acc else down i (j+1) (j::acc)
+  in
+  match compare i j with
+    | 0 -> []
+    | n when n<0 -> up i (j-1) []
+    | _ -> down i (j+1) []

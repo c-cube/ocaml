@@ -59,6 +59,8 @@ module type OrderedType =
   end
 (** Input signature of the functor {!Map.Make}. *)
 
+type 'a gen = unit -> 'a option
+
 module type S =
   sig
     type key
@@ -223,7 +225,46 @@ module type S =
     (** Same as {!Map.S.map}, but the function receives as arguments both the
        key and the associated value for each binding of the map. *)
 
+    (** {6 Iterators} *)
 
+    val to_gen : 'a t -> (key * 'a) gen
+    (** Iterate on the whole map, in ascending order
+        @since NEXT_RELEASE *)
+
+    val to_gen_keys : _ t -> key gen
+    (** Iterate on keys, in ascending order
+        @since NEXT_RELEASE *)
+
+    val to_gen_values : 'a t -> 'a gen
+    (** Iterate on values, in ascending order of their corresponding key
+        @since NEXT_RELEASE *)
+
+    val to_gen_range : ?low:key -> ?high:key -> 'a t -> (key * 'a) gen
+    (** [to_gen_range ?low ?high m] iterates on a subset of the bindings of [m],
+        in ascending order.
+        @param low if set, only bindings whose key is [>= low] will be yield
+        @param high if set, only bindings whose key is [<= high] will be yield
+        @since NEXT_RELEASE *)
+
+    val add_gen : 'a t -> (key * 'a) gen -> 'a t
+    (** Add the given bindings to the map, in order.
+        @since NEXT_RELEASE *)
+
+    val of_gen : (key * 'a) gen -> 'a t
+    (** Build a map from the given bindings
+        @since NEXT_RELEASE *)
+
+    val to_list : 'a t -> (key * 'a) list
+    (** List of bindings, in ascending order
+        @since NEXT_RELEASE *)
+
+    val add_list : 'a t -> (key * 'a) list -> 'a t
+    (** Add the given bindings to the map, in order.
+        @since NEXT_RELEASE *)
+
+    val of_list : (key * 'a) list -> 'a t
+    (** Build a map from the given bindings
+        @since NEXT_RELEASE *)
   end
 (** Output signature of the functor {!Map.Make}. *)
 

@@ -212,6 +212,50 @@ val stats : ('a, 'b) t -> statistics
    buckets by size.
    @since 4.00.0 *)
 
+(** {6 Iterators} *)
+
+type 'a gen = unit -> 'a option
+
+val to_gen : ('a,'b) t -> ('a * 'b) gen
+(** Iterate on the whole table, in unspecified order
+        @since NEXT_RELEASE *)
+
+val to_gen_keys : ('a,_) t -> 'a gen
+(** Iterate on 'as, in ascending order
+    @since NEXT_RELEASE *)
+
+val to_gen_values : (_,'b) t -> 'b gen
+(** Iterate on values, in ascending order of their corresponding 'a
+    @since NEXT_RELEASE *)
+
+val add_gen : ('a,'b) t -> ('a * 'b) gen -> unit
+(** Add the given bindings to the table, using {!add}
+    @since NEXT_RELEASE *)
+
+val replace_gen : ('a,'b) t -> ('a * 'b) gen -> unit
+(** Add the given bindings to the table, using {!replace}
+    @since NEXT_RELEASE *)
+
+val of_gen : ('a * 'b) gen -> ('a, 'b) t
+(** Build a table from the given bindings
+    @since NEXT_RELEASE *)
+
+val to_list : ('a, 'b) t -> ('a * 'b) list
+(** List of bindings, in unspecified order
+    @since NEXT_RELEASE *)
+
+val add_list : ('a, 'b) t -> ('a * 'b) list -> unit
+(** Add the given bindings to the table, using {!add}.
+    @since NEXT_RELEASE *)
+
+val replace_list : ('a, 'b) t -> ('a * 'b) list -> unit
+(** Add the given bindings to the table, using {!replace}.
+    @since NEXT_RELEASE *)
+
+val of_list : ('a * 'b) list -> ('a, 'b) t
+(** Build a table from the given bindings
+    @since NEXT_RELEASE *)
+
 (** {6 Functorial interface} *)
 
 (** The functorial interface allows the use of specific comparison
@@ -287,9 +331,24 @@ module type S =
     val length : 'a t -> int
     val stats: 'a t -> statistics
   end
-(** The output signature of the functor {!Hashtbl.Make}. *)
+(** The core output signature of the functor {!Hashtbl.Make}. *)
 
-module Make (H : HashedType) : S with type key = H.t
+module type FULL =
+  sig
+    include S
+    val to_gen : 'a t -> (key * 'a) gen
+    val to_gen_keys : _ t -> key gen
+    val to_gen_values : 'a t -> 'a gen
+    val add_gen : 'a t -> (key * 'a) gen -> unit
+    val replace_gen : 'a t -> (key * 'a) gen -> unit
+    val of_gen : (key * 'a) gen -> 'a t
+    val to_list : 'a t -> (key * 'a) list
+    val add_list : 'a t -> (key * 'a) list -> unit
+    val replace_list : 'a t -> (key * 'a) list -> unit
+    val of_list : (key * 'a) list -> 'a t
+  end
+
+module Make (H : HashedType) : FULL with type key = H.t
 (** Functor building an implementation of the hashtable structure.
     The functor [Hashtbl.Make] returns a structure containing
     a type [key] of keys and a type ['a t] of hash tables
@@ -339,10 +398,27 @@ module type SeededS =
     val length : 'a t -> int
     val stats: 'a t -> statistics
   end
-(** The output signature of the functor {!Hashtbl.MakeSeeded}.
+(** The core output signature of the functor {!Hashtbl.MakeSeeded}.
     @since 4.00.0 *)
 
-module MakeSeeded (H : SeededHashedType) : SeededS with type key = H.t
+module type SeededSFull =
+  sig
+    include SeededS
+    val to_gen : 'a t -> (key * 'a) gen
+    val to_gen_keys : _ t -> key gen
+    val to_gen_values : 'a t -> 'a gen
+    val add_gen : 'a t -> (key * 'a) gen -> unit
+    val replace_gen : 'a t -> (key * 'a) gen -> unit
+    val of_gen : (key * 'a) gen -> 'a t
+    val to_list : 'a t -> (key * 'a) list
+    val add_list : 'a t -> (key * 'a) list -> unit
+    val replace_list : 'a t -> (key * 'a) list -> unit
+    val of_list : (key * 'a) list -> 'a t
+  end
+(** The full output signature of the functor {!Hashtbl.MakeSeeded}.
+    @since NEXT_RELEASE *)
+
+module MakeSeeded (H : SeededHashedType) : SeededSFull with type key = H.t
 (** Functor building an implementation of the hashtable structure.
     The functor [Hashtbl.MakeSeeded] returns a structure containing
     a type [key] of keys and a type ['a t] of hash tables

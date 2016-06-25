@@ -292,3 +292,43 @@ let stable_sort cmp a =
 
 
 let fast_sort = stable_sort
+
+(** {6 Iterators} *)
+
+type 'a gen = unit -> 'a option
+
+let to_gen a =
+  let k = ref 0 in
+  fun () ->
+    if !k < length a
+    then (
+      let x = unsafe_get a !k in
+      incr k;
+      Some x
+    ) else None
+
+let to_gen_i a =
+  let k = ref 0 in
+  fun () ->
+    if !k < length a
+    then (
+      let i = !k in
+      let x = unsafe_get a i in
+      incr k;
+      Some (i,x)
+    ) else None
+
+let of_gen g =
+  (* read into list *)
+  let rec aux l g = match g() with
+    | None -> l
+    | Some x -> aux (x::l) g
+  in
+  let l = aux [] g in
+  of_list (List.rev l)
+
+let range i j =
+  if i=j then [| |]
+  else if i>j
+    then init (i-j) (fun k -> i-k)
+    else init (j-i) (fun k -> i+k)

@@ -80,3 +80,20 @@ val transfer : 'a t -> 'a t -> unit
    the queue [q2], then clears [q1]. It is equivalent to the
    sequence [iter (fun x -> add x q2) q1; clear q1], but runs
    in constant time. *)
+
+(** {6 Iterators} *)
+
+type 'a gen = unit -> 'a option
+
+val to_gen : 'a t -> 'a gen
+(** Iterate on the queue
+    @since NEXT_RELEASE *)
+
+val add_gen : 'a t -> 'a gen -> unit
+(** Add the elements from the generator to the end of the queue
+    @since NEXT_RELEASE *)
+
+val of_gen : 'a gen -> 'a t
+(** Create an array from the generator
+    @since NEXT_RELEASE *)
+

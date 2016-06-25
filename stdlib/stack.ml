@@ -42,3 +42,19 @@ let length s = s.len
 let iter f s = List.iter f s.c
 
 let fold f acc s = List.fold_left f acc s.c
+
+(** {6 Iterators} *)
+
+type 'a gen = unit -> 'a option
+
+let to_gen s = List.to_gen s.c
+
+let rec add_gen q g = match g() with
+  | None -> ()
+  | Some x -> push x q; add_gen q g
+
+let of_gen g =
+  let s = create() in
+  add_gen s g;
+  s
+

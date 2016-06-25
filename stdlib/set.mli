@@ -44,6 +44,8 @@
    of sets of [int * int].
 *)
 
+type 'a gen = unit -> 'a option
+
 module type OrderedType =
   sig
     type t
@@ -197,6 +199,35 @@ module type S =
         This is usually more efficient than folding [add] over the list,
         except perhaps for lists with many duplicated elements.
         @since 4.02.0 *)
+
+    (** {6 Iterators} *)
+
+    val to_gen_range : ?low:elt -> ?high:elt -> t -> elt gen
+    (** [to_gen_range ?low ?high s] iterates on a subset of the elements of [s],
+        in ascending order.
+        @param low if set, only elements [>= low] will be yield
+        @param high if set, only elements [<= high] will be yield
+        @since NEXT_RELEASE *)
+
+    val to_gen : t -> elt gen
+    (** Iterate on the whole set, in ascending order
+        @since NEXT_RELEASE *)
+
+    val add_gen : t -> elt gen -> t
+    (** Add the given elements to the set, in order.
+        @since NEXT_RELEASE *)
+
+    val of_gen : elt gen -> t
+    (** Build a set from the given bindings
+        @since NEXT_RELEASE *)
+
+    val to_list : t -> elt list
+    (** Alias to {!elements}
+        @since NEXT_RELEASE *)
+
+    val add_list : t -> elt list -> t
+    (** Add the given elements to the set, in order.
+        @since NEXT_RELEASE *)
   end
 (** Output signature of the functor {!Set.Make}. *)
 

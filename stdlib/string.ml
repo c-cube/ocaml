@@ -137,3 +137,17 @@ let capitalize s =
   B.capitalize (bos s) |> bts
 let uncapitalize s =
   B.uncapitalize (bos s) |> bts
+
+(** {6 Iterators} *)
+
+type 'a gen = unit -> 'a option
+
+let to_gen s = bos s |> B.to_gen
+
+let to_gen_i s = bos s |> B.to_gen_i
+
+let of_list l = B.of_list l |> bts
+
+let of_gen g = B.of_gen g |> bts
+
+let to_list s = B.to_list (bos s)

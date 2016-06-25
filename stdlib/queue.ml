@@ -130,3 +130,25 @@ let transfer q1 q2 =
       last.next <- q1.first;
       q2.last <- q1.last;
       clear q1
+
+(** {6 Iterators} *)
+
+type 'a gen = unit -> 'a option
+
+let to_gen q =
+  let cur = ref q.first in
+  fun () -> match !cur with
+    | Nil -> None
+    | Cons { content=x; next; } ->
+        cur := next;
+        Some x
+
+let rec add_gen q g = match g() with
+  | None -> ()
+  | Some x -> push x q; add_gen q g
+
+let of_gen g =
+  let q = create() in
+  add_gen q g;
+  q
+

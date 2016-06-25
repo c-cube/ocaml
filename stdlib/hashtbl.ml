@@ -332,6 +332,63 @@ let stats h =
     max_bucket_length = mbl;
     bucket_histogram = histo }
 
+(** {6 Iterators} *)
+
+type 'a gen = unit -> 'a option
+
+let to_gen tbl =
+  let i = ref 0 in (* next bucket to traverse *)
+  let buck = ref Empty in
+  let rec next() = match !buck with
+    | Empty ->
+        if !i = Array.length tbl.data then None
+        else (
+          buck := tbl.data.(!i);
+          incr i;
+          next()
+        )
+    | Cons {key; data; next} ->
+        buck := next;
+        Some (key, data)
+  in next
+
+let to_gen_keys m =
+  let g = to_gen m in
+  fun () -> match g() with
+    | None -> None
+    | Some (k,_) -> Some k
+
+let to_gen_values m =
+  let g = to_gen m in
+  fun () -> match g() with
+    | None -> None
+    | Some (_,v) -> Some v
+
+let rec add_gen tbl g = match g() with
+  | None -> ()
+  | Some (k,v) -> add tbl k v; add_gen tbl g
+
+let rec replace_gen tbl g = match g() with
+  | None -> ()
+  | Some (k,v) -> replace tbl k v; replace_gen tbl g
+
+let of_gen g =
+  let tbl = create 16 in
+  replace_gen tbl g;
+  tbl
+
+let to_list tbl =
+  fold (fun k v l -> (k,v) :: l) tbl []
+
+let add_list tbl l = List.iter (fun (k,v) -> add tbl k v) l
+
+let replace_list tbl l = List.iter (fun (k,v) -> replace tbl k v) l
+
+let of_list l =
+  let tbl = create 16 in
+  replace_list tbl l;
+  tbl
+
 (* Functorial interface *)
 
 module type HashedType =
@@ -352,21 +409,36 @@ module type S =
   sig
     type key
     type 'a t
-    val create: int -> 'a t
+    val create : int -> 'a t
     val clear : 'a t -> unit
     val reset : 'a t -> unit
-    val copy: 'a t -> 'a t
-    val add: 'a t -> key -> 'a -> unit
-    val remove: 'a t -> key -> unit
-    val find: 'a t -> key -> 'a
-    val find_all: 'a t -> key -> 'a list
+    val copy : 'a t -> 'a t
+    val add : 'a t -> key -> 'a -> unit
+    val remove : 'a t -> key -> unit
+    val find : 'a t -> key -> 'a
+    val find_all : 'a t -> key -> 'a list
     val replace : 'a t -> key -> 'a -> unit
     val mem : 'a t -> key -> bool
-    val iter: (key -> 'a -> unit) -> 'a t -> unit
+    val iter : (key -> 'a -> unit) -> 'a t -> unit
     val filter_map_inplace: (key -> 'a -> 'a option) -> 'a t -> unit
-    val fold: (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
-    val length: 'a t -> int
+    val fold : (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
+    val length : 'a t -> int
     val stats: 'a t -> statistics
+  end
+
+module type FULL =
+  sig
+    include S
+    val to_gen : 'a t -> (key * 'a) gen
+    val to_gen_keys : _ t -> key gen
+    val to_gen_values : 'a t -> 'a gen
+    val add_gen : 'a t -> (key * 'a) gen -> unit
+    val replace_gen : 'a t -> (key * 'a) gen -> unit
+    val of_gen : (key * 'a) gen -> 'a t
+    val to_list : 'a t -> (key * 'a) list
+    val add_list : 'a t -> (key * 'a) list -> unit
+    val replace_list : 'a t -> (key * 'a) list -> unit
+    val of_list : (key * 'a) list -> 'a t
   end
 
 module type SeededS =
@@ -390,7 +462,22 @@ module type SeededS =
     val stats: 'a t -> statistics
   end
 
-module MakeSeeded(H: SeededHashedType): (SeededS with type key = H.t) =
+module type SeededSFull =
+  sig
+    include SeededS
+    val to_gen : 'a t -> (key * 'a) gen
+    val to_gen_keys : _ t -> key gen
+    val to_gen_values : 'a t -> 'a gen
+    val add_gen : 'a t -> (key * 'a) gen -> unit
+    val replace_gen : 'a t -> (key * 'a) gen -> unit
+    val of_gen : (key * 'a) gen -> 'a t
+    val to_list : 'a t -> (key * 'a) list
+    val add_list : 'a t -> (key * 'a) list -> unit
+    val replace_list : 'a t -> (key * 'a) list -> unit
+    val of_list : (key * 'a) list -> 'a t
+  end
+
+module MakeSeeded(H: SeededHashedType): (SeededSFull with type key = H.t) =
   struct
     type key = H.t
     type 'a hashtbl = (key, 'a) t
@@ -487,9 +574,19 @@ module MakeSeeded(H: SeededHashedType): (SeededS with type key = H.t) =
     let fold = fold
     let length = length
     let stats = stats
+    let to_gen = to_gen
+    let to_gen_keys = to_gen_keys
+    let to_gen_values = to_gen_values
+    let add_gen = add_gen
+    let replace_gen = replace_gen
+    let of_gen = of_gen
+    let add_list = add_list
+    let replace_list = replace_list
+    let to_list = to_list
+    let of_list = of_list
   end
 
-module Make(H: HashedType): (S with type key = H.t) =
+module Make(H: HashedType): (FULL with type key = H.t) =
   struct
     include MakeSeeded(struct
         type t = H.t

@@ -297,3 +297,20 @@ val merge : ('a -> 'a -> int) -> 'a list -> 'a list -> 'a list
     before the elements of [l2].
     Not tail-recursive (sum of the lengths of the arguments).
 *)
+
+(** {6 Iterators} *)
+
+type 'a gen = unit -> 'a option
+
+val to_gen : 'a list -> 'a gen
+(** Iterate on the list
+    @since NEXT_RELEASE *)
+
+val of_gen : 'a gen -> 'a list
+(** Create a list from the generator
+    @since NEXT_RELEASE *)
+
+val range : int -> int -> int list
+(** [range a b] is the integer range that includes [a] but excludes [b].
+    If [a=b], the list is empty
+    @since NEXT_RELEASE *)

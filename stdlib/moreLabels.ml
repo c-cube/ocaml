@@ -15,6 +15,8 @@
 
 (* Module [MoreLabels]: meta-module for compatibility labelled libraries *)
 
+type 'a gen = unit -> 'a option
+
 module Hashtbl = Hashtbl
 
 module Map = Map

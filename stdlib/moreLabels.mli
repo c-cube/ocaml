@@ -23,6 +23,8 @@
    The contents of this module are subject to change.
 *)
 
+type 'a gen = unit -> 'a option
+
 module Hashtbl : sig
   type ('a, 'b) t = ('a, 'b) Hashtbl.t
   val create : ?random:bool -> int -> ('a, 'b) t
@@ -135,6 +137,15 @@ module Map : sig
       val find : key -> 'a t -> 'a
       val map : f:('a -> 'b) -> 'a t -> 'b t
       val mapi : f:(key -> 'a -> 'b) -> 'a t -> 'b t
+      val to_gen : 'a t -> (key * 'a) gen
+      val to_gen_keys : _ t -> key gen
+      val to_gen_values : 'a t -> 'a gen
+      val to_gen_range : ?low:key -> ?high:key -> 'a t -> (key * 'a) gen
+      val add_gen : 'a t -> (key * 'a) gen -> 'a t
+      val of_gen : (key * 'a) gen -> 'a t
+      val to_list : 'a t -> (key * 'a) list
+      val add_list : 'a t -> (key * 'a) list -> 'a t
+      val of_list : (key * 'a) list -> 'a t
   end
   module Make : functor (Ord : OrderedType) -> S with type key = Ord.t
 end
@@ -172,6 +183,12 @@ module Set : sig
       val split: elt -> t -> t * bool * t
       val find: elt -> t -> elt
       val of_list: elt list -> t
+      val to_gen_range : ?low:elt -> ?high:elt -> t -> elt gen
+      val to_gen : t -> elt gen
+      val add_gen : t -> elt gen -> t
+      val of_gen : elt gen -> t
+      val to_list : t -> elt list
+      val add_list : t -> elt list -> t
     end
   module Make : functor (Ord : OrderedType) -> S with type elt = Ord.t
 end

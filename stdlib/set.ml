@@ -15,6 +15,8 @@
 
 (* Sets over ordered types *)
 
+type 'a gen = unit -> 'a option
+
 module type OrderedType =
   sig
     type t
@@ -52,6 +54,12 @@ module type S =
     val split: elt -> t -> t * bool * t
     val find: elt -> t -> elt
     val of_list: elt list -> t
+    val to_gen_range : ?low:elt -> ?high:elt -> t -> elt gen
+    val to_gen : t -> elt gen
+    val add_gen : t -> elt gen -> t
+    val of_gen : elt gen -> t
+    val to_list : t -> elt list
+    val add_list : t -> elt list -> t
   end
 
 module Make(Ord: OrderedType) =
@@ -418,4 +426,50 @@ module Make(Ord: OrderedType) =
       | [x0; x1; x2; x3] -> add x3 (add x2 (add x1 (singleton x0)))
       | [x0; x1; x2; x3; x4] -> add x4 (add x3 (add x2 (add x1 (singleton x0))))
       | _ -> of_sorted_list (List.sort_uniq Ord.compare l)
+
+    let add_list s l = List.fold_left (fun acc x -> add x acc) s l
+
+    let to_list = elements
+
+    let rec add_gen m g = match g() with
+      | None -> m
+      | Some x -> add_gen (add x m) g
+
+    let of_gen g = add_gen empty g
+
+    let to_gen s =
+      let st = ref [s] in
+      let rec next() = match !st with
+        | [] -> None
+        | head :: tail ->
+          st := tail;
+          match head with
+          | Empty -> next ()
+          | Node (l, x, r, _) ->
+              st := l :: r :: !st;
+              Some x
+      in next
+
+    let to_gen_range ?low ?high s =
+      let st = ref [s] in
+      let rec next() = match !st with
+        | [] -> None
+        | head :: tail ->
+          st := tail;
+          match head with
+          | Empty -> next ()
+          | Node (l, x, r, _) ->
+              let cmp_low = match low with
+                | None -> 1 (* - infinity *)
+                | Some l -> Ord.compare l x
+              and cmp_high = match high with
+                | None -> -1 (* + infinity *)
+                | Some h -> Ord.compare x h
+              in
+              if cmp_high < 0 then st := r :: !st;
+              if cmp_low > 0 then st := l :: !st;
+              if cmp_low >= 0 && cmp_high <= 0
+              then Some x
+              else next ()
+      in next
   end

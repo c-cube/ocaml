@@ -268,6 +268,27 @@ val fast_sort : ('a -> 'a -> int) -> 'a array -> unit
 *)
 
 
+(** {6 Iterators} *)
+
+type 'a gen = unit -> 'a option
+
+val to_gen : 'a array -> 'a gen
+(** Iterate on the array, in increasing order
+    @since NEXT_RELEASE *)
+
+val to_gen_i : 'a array -> (int * 'a) gen
+(** Iterate on the array, in increasing order, yielding indices along elements
+    @since NEXT_RELEASE *)
+
+val of_gen : 'a gen -> 'a array
+(** Create an array from the generator
+    @since NEXT_RELEASE *)
+
+val range : int -> int -> int array
+(** [range a b] is the integer range that includes [a] but excludes [b].
+    If [a=b], the array is empty
+    @since NEXT_RELEASE *)
+
 (**/**)
 (** {6 Undocumented functions} *)
 

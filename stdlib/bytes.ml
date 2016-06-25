@@ -268,3 +268,46 @@ let lowercase s = map Char.lowercase s
 
 let capitalize s = apply1 Char.uppercase s
 let uncapitalize s = apply1 Char.lowercase s
+
+(** {6 Iterators} *)
+
+type 'a gen = unit -> 'a option
+
+let to_gen s =
+  let i = ref 0 in
+  fun () ->
+    if !i = length s then None
+    else (
+      let x = get s !i in
+      incr i;
+      Some x
+    )
+
+let to_gen_i s =
+  let n = ref 0 in
+  fun () ->
+    if !n = length s then None
+    else (
+      let i = !n in
+      let x = get s i in
+      incr n;
+      Some (i,x)
+    )
+
+let of_list l =
+  let n = List.length l in
+  let b = make n '\000' in
+  List.iteri (fun i c -> set b i c) l;
+  b
+
+let to_list b =
+  let l = ref [] in
+  for i = length b - 1 downto 0 do
+    l := get b i :: !l
+  done;
+  !l
+
+let of_gen g =
+  let l = List.of_gen g in
+  of_list l
+
