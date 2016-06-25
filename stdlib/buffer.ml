@@ -188,3 +188,50 @@ let add_substitute b f s =
     end else
     if previous = '\\' then add_char b previous in
   subst ' ' 0
+
+(** {6 Iterators} *)
+
+type 'a gen = unit -> 'a option
+
+let to_gen b =
+  let i = ref 0 in
+  fun () ->
+    if !i = b.position then None
+    else (
+      let x = Bytes.get b.buffer !i in
+      incr i;
+      Some x
+    )
+
+let to_gen_i b =
+  let n = ref 0 in
+  fun () ->
+    if !n = b.position then None
+    else (
+      let i = !n in
+      let x = Bytes.get b.buffer i in
+      incr n;
+      Some (i,x)
+    )
+
+let rec add_gen b g = match g() with
+    | None -> ()
+    | Some c -> add_char b c; add_gen b g
+
+let of_gen g =
+  let b = create 32 in
+  add_gen b g;
+  b
+
+let of_list l =
+  let b = create 32 in
+  List.iter (add_char b) l;
+  b
+
+let to_list b =
+  let l = ref [] in
+  for i = b.position - 1 downto 0 do
+    l := Bytes.get b.buffer i :: !l
+  done;
+  !l
+

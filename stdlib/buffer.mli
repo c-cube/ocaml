@@ -131,3 +131,33 @@ val add_channel : t -> in_channel -> int -> unit
 val output_buffer : out_channel -> t -> unit
 (** [output_buffer oc b] writes the current contents of buffer [b]
    on the output channel [oc]. *)
+
+
+(** {6 Iterators} *)
+
+type 'a gen = unit -> 'a option
+
+val to_gen : t -> char gen
+(** Iterate on the buffer, in increasing order
+    @since NEXT_RELEASE *)
+
+val to_gen_i : t -> (int * char) gen
+(** Iterate on the buffer, in increasing order, yielding indices along chars
+    @since NEXT_RELEASE *)
+
+val add_gen : t -> char gen -> unit
+(** Add chars to the buffer
+    @since NEXT_RELEASE *)
+
+val of_gen : char gen -> t
+(** Create a buffer from the generator
+    @since NEXT_RELEASE *)
+
+val of_list : char list -> t
+(** build from a list of chars
+    @since NEXT_RELEASE *)
+
+val to_list : t -> char list
+(** Get a list of chars
+    @since NEXT_RELEASE *)
+
