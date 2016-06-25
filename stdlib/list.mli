@@ -312,5 +312,7 @@ val of_gen : 'a gen -> 'a list
 
 val range : int -> int -> int list
 (** [range a b] is the integer range that includes [a] but excludes [b].
-    If [a=b], the list is empty
+    If [a=b], the list is empty;
+    If [a<b], it returns [[a; a+1; ...; b-1]]
+    if [a>b], it returns [[a; a-1; ...; b+1]]
     @since NEXT_RELEASE *)
