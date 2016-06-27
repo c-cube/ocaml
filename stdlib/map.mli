@@ -233,11 +233,9 @@ module type S =
     (** Iterate on values, in ascending order of their corresponding key
         @since NEXT_RELEASE *)
 
-    val cursor_start_range : ?low:key -> ?high:key -> 'a t -> 'a cursor
-    (** [cursor_start_range ?low ?high s] iterates on a subset of the bindings of [m],
-        in ascending order.
-        @param low if set, only elements [>= low] will be yield
-        @param high if set, only elements [< high] will be yield
+    val cursor_start_at : key -> 'a t -> 'a cursor
+    (** [cursor_start_at k m] iterates on a subset of the bindings of [m],
+        in ascending order, from key [k] or above.
         @since NEXT_RELEASE *)
 
     val cursor_next : 'a cursor -> (key * 'a * 'a cursor) option

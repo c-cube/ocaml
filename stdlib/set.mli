@@ -208,11 +208,9 @@ module type S =
     (** Start iterating over all the elements
         @since NEXT_RELEASE *)
 
-    val cursor_start_range : ?low:elt -> ?high:elt -> t -> cursor
-    (** [cursor_start_range ?low ?high s] iterates on a subset of the elements of [s],
-        in ascending order.
-        @param low if set, only elements [>= low] will be yield
-        @param high if set, only elements [< high] will be yield
+    val cursor_start_at : elt -> t -> cursor
+    (** [cursor_start_at low s] iterates on a subset of the elements of [s],
+        in ascending order, starting from [low].
         @since NEXT_RELEASE *)
 
     val cursor_next : cursor -> (elt * cursor) option

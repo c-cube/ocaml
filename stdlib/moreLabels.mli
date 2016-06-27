@@ -154,7 +154,7 @@ module Map : sig
       val mapi : f:(key -> 'a -> 'b) -> 'a t -> 'b t
       type 'a cursor
       val cursor_start : 'a t -> 'a cursor
-      val cursor_start_range : ?low:key -> ?high:key -> 'a t -> 'a cursor
+      val cursor_start_at : low:key -> 'a t -> 'a cursor
       val cursor_next : 'a cursor -> (key * 'a * 'a cursor) option
   end
   module Make : functor (Ord : OrderedType) -> S with type key = Ord.t
@@ -195,7 +195,7 @@ module Set : sig
       val of_list: elt list -> t
       type cursor
       val cursor_start : t -> cursor
-      val cursor_start_range : ?low:elt -> ?high:elt -> t -> cursor
+      val cursor_start_at : low:elt -> t -> cursor
       val cursor_next : cursor -> (elt * cursor) option
     end
   module Make : functor (Ord : OrderedType) -> S with type elt = Ord.t
