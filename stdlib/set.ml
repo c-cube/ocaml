@@ -53,8 +53,8 @@ module type S =
     val find: elt -> t -> elt
     val of_list: elt list -> t
     type cursor
-    val cursor_start : t -> cursor
-    val cursor_start_at : elt -> t -> cursor
+    val cursor : t -> cursor
+    val cursor_at : elt -> t -> cursor
     val cursor_next : cursor -> (elt * cursor) option
   end
 
@@ -423,35 +423,23 @@ module Make(Ord: OrderedType) =
       | [x0; x1; x2; x3; x4] -> add x4 (add x3 (add x2 (add x1 (singleton x0))))
       | _ -> of_sorted_list (List.sort_uniq Ord.compare l)
 
-    type cursor_action =
-      | Act_yield of elt
-      | Act_explore of t
+    type cursor = enumeration
 
-    type cursor = cursor_action list
+    let cursor s = cons_enum s End
 
-    let cursor_start s = [Act_explore s]
-
-    let cursor_start_at low m =
-      let rec aux low c m = match m with
+    let cursor_at low m =
+      let rec aux low m c = match m with
         | Empty -> c
         | Node (l, x, r, _) ->
             begin match Ord.compare x low with
-              | 0 -> Act_yield x :: Act_explore r :: c
-              | n when n<0 -> aux low c r
-              | _ -> aux low (Act_yield x :: Act_explore r :: c) l
+              | 0 -> More (x, r, c)
+              | n when n<0 -> aux low r c
+              | _ -> aux low l (More (x, r, c))
             end
       in
-      aux low [] m
+      aux low m End
 
-    let rec cursor_next c = match c with
-      | [] -> None
-      | head :: c' ->
-          match head with
-            | Act_yield x -> Some (x,c')
-            | Act_explore Empty -> cursor_next c'
-            | Act_explore (Node (l, x, r, _)) ->
-                let c' =
-                  Act_explore l :: Act_yield x :: Act_explore r :: c'
-                in
-                cursor_next c'
+    let cursor_next c = match c with
+      | End -> None
+      | More (x, t, c') -> Some (x, cons_enum t c')
   end

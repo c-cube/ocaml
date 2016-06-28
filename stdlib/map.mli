@@ -229,18 +229,19 @@ module type S =
     (** Cursor to iterate over bindings
         @since NEXT_RELEASE *)
 
-    val cursor_start : 'a t -> 'a cursor
-    (** Iterate on values, in ascending order of their corresponding key
+    val cursor : 'a t -> 'a cursor
+    (** [cursor m] iterate on values in [m], in ascending order of their corresponding key
         @since NEXT_RELEASE *)
 
-    val cursor_start_at : key -> 'a t -> 'a cursor
+    val cursor_at : key -> 'a t -> 'a cursor
     (** [cursor_start_at k m] iterates on a subset of the bindings of [m],
         in ascending order, from key [k] or above.
         @since NEXT_RELEASE *)
 
     val cursor_next : 'a cursor -> (key * 'a * 'a cursor) option
-    (** [cursor_next c] returns the next element and a new cursor
-        that is positioned just after this element
+    (** [cursor_next c] is the next element and a new cursor
+        that is positioned just after this element, or [None] if the cursor
+        is empty.
         @since NEXT_RELEASE *)
   end
 (** Output signature of the functor {!Map.Make}. *)

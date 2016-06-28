@@ -204,17 +204,18 @@ module type S =
     (** A cursor iterating over elements
         @since NEXT_RELEASE *)
 
-    val cursor_start : t -> cursor
-    (** Start iterating over all the elements
+    val cursor : t -> cursor
+    (** [cursor s] starts iterating over all the elements of [s]
         @since NEXT_RELEASE *)
 
-    val cursor_start_at : elt -> t -> cursor
-    (** [cursor_start_at low s] iterates on a subset of the elements of [s],
+    val cursor_at : elt -> t -> cursor
+    (** [cursor_at low s] iterates on a subset of the elements of [s],
         in ascending order, starting from [low].
         @since NEXT_RELEASE *)
 
     val cursor_next : cursor -> (elt * cursor) option
-    (** Next element and cursor
+    (** [cursor_next c] returns the next element of [c], and the next position
+          of the cursor, or [None] if the cursor is empty.
         @since NEXT_RELEASE *)
   end
 (** Output signature of the functor {!Set.Make}. *)

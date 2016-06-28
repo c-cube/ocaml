@@ -50,8 +50,8 @@ module type S =
     val map: ('a -> 'b) -> 'a t -> 'b t
     val mapi: (key -> 'a -> 'b) -> 'a t -> 'b t
     type 'a cursor
-    val cursor_start : 'a t -> 'a cursor
-    val cursor_start_at : key -> 'a t -> 'a cursor
+    val cursor : 'a t -> 'a cursor
+    val cursor_at : key -> 'a t -> 'a cursor
     val cursor_next : 'a cursor -> (key * 'a * 'a cursor) option
   end
 
@@ -360,35 +360,23 @@ module Make(Ord: OrderedType) = struct
 
     let choose = min_binding
 
-    type 'a cursor_action =
-      | Act_yield of key * 'a
-      | Act_explore of 'a t
+    type 'a cursor = 'a enumeration
 
-    type 'a cursor = 'a cursor_action list
+    let cursor m = cons_enum m End
 
-    let cursor_start m = [Act_explore m]
-
-    let cursor_start_at low m =
-      let rec aux low c m = match m with
+    let cursor_at low m =
+      let rec aux low m c = match m with
         | Empty -> c
         | Node (l, k, v, r, _) ->
             begin match Ord.compare k low with
-              | 0 -> Act_yield (k, v) :: Act_explore r :: c
-              | n when n<0 -> aux low c r
-              | _ -> aux low (Act_yield (k,v) :: Act_explore r :: c) l
+              | 0 -> More (k, v, r, c)
+              | n when n<0 -> aux low r c
+              | _ -> aux low l (More (k, v, r, c))
             end
       in
-      aux low [] m
+      aux low m End
 
-    let rec cursor_next c = match c with
-      | [] -> None
-      | head :: c' ->
-          match head with
-            | Act_yield (k,v) -> Some (k,v,c')
-            | Act_explore Empty -> cursor_next c'
-            | Act_explore (Node (l, k, v, r, _)) ->
-                let c' =
-                  Act_explore l :: Act_yield (k,v) :: Act_explore r :: c'
-                in
-                cursor_next c'
+    let cursor_next c = match c with
+      | End -> None
+      | More (k, v, t, c') -> Some (k, v, cons_enum t c')
 end
