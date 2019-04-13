@@ -109,17 +109,18 @@ let rec loop lexbuf in_error checkpoint =
   | I.HandlingError _ ->
       loop lexbuf true (I.resume checkpoint)
 
-let wrap_menhir entry lexbuf =
+let wrap_menhir unsafe_entry safe_entry lexbuf =
+  let entry = if ! Clflags.safe_syntax then safe_entry else unsafe_entry in
   let initial = entry lexbuf.Lexing.lex_curr_p in
   wrap (fun lexbuf -> loop lexbuf false initial) lexbuf
 
-let implementation = wrap_menhir Parser.Incremental.implementation
-and interface = wrap_menhir Parser.Incremental.interface
-and toplevel_phrase = wrap_menhir Parser.Incremental.toplevel_phrase
-and use_file = wrap_menhir Parser.Incremental.use_file
-and core_type = wrap_menhir Parser.Incremental.parse_core_type
-and expression = wrap_menhir Parser.Incremental.parse_expression
-and pattern = wrap_menhir Parser.Incremental.parse_pattern
+let implementation = wrap_menhir Parser.Incremental.implementation Safe_parser.Incremental.implementation
+and interface = wrap_menhir Parser.Incremental.interface Safe_parser.Incremental.interface
+and toplevel_phrase = wrap_menhir Parser.Incremental.toplevel_phrase Safe_parser.Incremental.toplevel_phrase
+and use_file = wrap_menhir Parser.Incremental.use_file Safe_parser.Incremental.use_file
+and core_type = wrap_menhir Parser.Incremental.parse_core_type Safe_parser.Incremental.parse_core_type
+and expression = wrap_menhir Parser.Incremental.parse_expression Safe_parser.Incremental.parse_expression
+and pattern = wrap_menhir Parser.Incremental.parse_pattern Safe_parser.Incremental.parse_pattern
 
 
 

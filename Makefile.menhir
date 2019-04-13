@@ -66,14 +66,15 @@ MENHIRFLAGS := --explain --dump --ocamlc "$(CAMLC) $(COMPFLAGS)" --infer \
 ## promote-menhir
 
 .PHONY: promote-menhir
-promote-menhir: parsing/parser.mly
+promote-menhir: parsing/parser.mly parsing/safe_parser.mly
 	@ $(MAKE) import-menhirLib
 	$(MENHIR) $(MENHIRFLAGS) parsing/parser.mly
+	$(MENHIR) $(MENHIRFLAGS) parsing/safe_parser.mly
 # The generated parser.ml may contain lexer directives containing
 # the absolute path to Menhir's standard library on the promoter's machine.
 # This is benign but will generate pointless churn if another developer
 # rebuilds the same grammar (from the same Menhir version).
-	@ for f in $(addprefix parser.,ml mli) ; do \
+	@ for f in $(addprefix parser.,ml mli) $(addprefix safe_parser.,ml mli) ; do \
 	  sed \
 	    's,^#\(.*\)"[^"]*/menhir/standard.mly",#\1"menhir/standard.mly",g' \
 	    parsing/$$f \
@@ -97,7 +98,7 @@ import-menhirLib:
 
 ## demote-menhir
 
-DEMOTE:=menhirLib.ml menhirLib.mli parser.ml parser.mli
+DEMOTE:=menhirLib.ml menhirLib.mli parser.ml parser.mli safe_parser.ml safe_parser.mli
 
 .PHONY: demote-menhir
 demote-menhir:
@@ -132,6 +133,7 @@ test-menhir: parsing/parser.mly
 partialclean-menhir::
 	rm -f \
 	  $(addprefix parsing/parser.,ml mli) \
+	  $(addprefix parsing/safe_parser.,ml mli) \
 	  $(addprefix parsing/camlinternalMenhirLib.,ml mli)
 
 clean-menhir: partialclean-menhir
@@ -143,6 +145,8 @@ clean-menhir: partialclean-menhir
 depend-menhir:
 	$(MENHIR) --depend --ocamldep "$(CAMLDEP) $(DEPFLAGS) $(DEPINCLUDES)" \
           parsing/parser.mly > .depend.menhir
+	$(MENHIR) --depend --ocamldep "$(CAMLDEP) $(DEPFLAGS) $(DEPINCLUDES)" \
+          parsing/safe_parser.mly >> .depend.menhir
 # this rule depends on the variables CAMLDEP, DEPFLAGS, DEPINCLUDES
 # defined in Makefile, so it can only be invoked from the main Makefile
 

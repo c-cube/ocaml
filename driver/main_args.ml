@@ -465,6 +465,10 @@ let mk_safe_string f =
   else " Make strings immutable"
 ;;
 
+let mk_safe_syntax f =
+  "-safe-string", Arg.Unit f, " Use safe syntax"
+;;
+
 let mk_shared f =
   "-shared", Arg.Unit f, " Produce a dynlinkable plugin"
 ;;
@@ -539,6 +543,10 @@ let mk_unsafe_string f =
     "-unsafe-string", Arg.Unit f, " Make strings mutable"
   else
     "-unsafe-string", Arg.Unit f, " Make strings mutable (default)"
+;;
+
+let mk_unsafe_syntax f =
+  "-unsafe-syntax", Arg.Unit f, " Use vanilla unsafe syntax"
 ;;
 
 let mk_use_runtime f =
@@ -870,6 +878,7 @@ module type Common_options = sig
   val _rectypes : unit -> unit
   val _no_rectypes : unit -> unit
   val _safe_string : unit -> unit
+  val _safe_syntax : unit -> unit
   val _short_paths : unit -> unit
   val _strict_sequence : unit -> unit
   val _no_strict_sequence : unit -> unit
@@ -879,6 +888,7 @@ module type Common_options = sig
   val _no_unboxed_types : unit -> unit
   val _unsafe : unit -> unit
   val _unsafe_string : unit -> unit
+  val _unsafe_syntax : unit -> unit
   val _version : unit -> unit
   val _vnum : unit -> unit
   val _w : string -> unit
@@ -1145,6 +1155,7 @@ struct
     mk_no_rectypes F._no_rectypes;
     mk_runtime_variant F._runtime_variant;
     mk_safe_string F._safe_string;
+    mk_safe_syntax F._safe_syntax;
     mk_short_paths F._short_paths;
     mk_strict_sequence F._strict_sequence;
     mk_no_strict_sequence F._no_strict_sequence;
@@ -1155,6 +1166,7 @@ struct
     mk_no_unboxed_types F._no_unboxed_types;
     mk_unsafe F._unsafe;
     mk_unsafe_string F._unsafe_string;
+    mk_unsafe_syntax F._unsafe_syntax;
     mk_use_runtime F._use_runtime;
     mk_use_runtime_2 F._use_runtime;
     mk_v F._v;

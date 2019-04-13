@@ -85,7 +85,7 @@ PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/docstrings.cmo parsing/syntaxerr.cmo \
   parsing/ast_helper.cmo \
   parsing/pprintast.cmo \
-  parsing/camlinternalMenhirLib.cmo parsing/parser.cmo \
+  parsing/camlinternalMenhirLib.cmo parsing/parser.cmo parsing/safe_parser.cmo \
   parsing/lexer.cmo parsing/parse.cmo parsing/printast.cmo \
   parsing/ast_mapper.cmo parsing/ast_iterator.cmo parsing/attr_helper.cmo \
   parsing/builtin_attributes.cmo parsing/ast_invariants.cmo parsing/depend.cmo
@@ -1064,11 +1064,11 @@ parsing/camlinternalMenhirLib.mli: boot/menhir/menhirLib.mli
 
 # Copy parsing/parser.ml from boot/
 
-parsing/parser.ml: boot/menhir/parser.ml parsing/parser.mly \
+parsing/%parser.ml: boot/menhir/parser.ml parsing/%parser.mly \
   tools/check-parser-uptodate-or-warn.sh
 	@tools/check-parser-uptodate-or-warn.sh
 	cat $< | sed "s/MenhirLib/CamlinternalMenhirLib/g" > $@
-parsing/parser.mli: boot/menhir/parser.mli
+parsing/%parser.mli: boot/menhir/%parser.mli
 	cat $< | sed "s/MenhirLib/CamlinternalMenhirLib/g" > $@
 
 
@@ -1256,7 +1256,7 @@ beforedepend:: bytecomp/opcodes.ml bytecomp/opcodes.mli
 
 # Testing the parser -- see parsing/HACKING.adoc
 
-SOURCE_FILES=$(shell git ls-files '*.ml' '*.mli' | grep -v boot/menhir/parser)
+SOURCE_FILES=$(shell git ls-files '*.ml' '*.mli' | grep -v 'boot/menhir/*parser')
 
 AST_FILES=$(addsuffix .ast,$(SOURCE_FILES))
 

@@ -171,6 +171,8 @@ let unsafe_string =
   else ref (not Config.default_safe_string)
                                    (* -safe-string / -unsafe-string *)
 
+let safe_syntax = ref false (* -safe-syntax / -unsafe-syntax *)
+
 let classic_inlining = ref false       (* -Oclassic *)
 let inlining_report = ref false    (* -inlining-report *)
 

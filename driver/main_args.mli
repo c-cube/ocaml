@@ -36,6 +36,7 @@ module type Common_options = sig
   val _rectypes : unit -> unit
   val _no_rectypes : unit -> unit
   val _safe_string : unit -> unit
+  val _safe_syntax : unit -> unit
   val _short_paths : unit -> unit
   val _strict_sequence : unit -> unit
   val _no_strict_sequence : unit -> unit
@@ -45,6 +46,7 @@ module type Common_options = sig
   val _no_unboxed_types : unit -> unit
   val _unsafe : unit -> unit
   val _unsafe_string : unit -> unit
+  val _unsafe_syntax : unit -> unit
   val _version : unit -> unit
   val _vnum : unit -> unit
   val _w : string -> unit
