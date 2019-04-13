@@ -284,20 +284,17 @@ parsing/docstrings.cmi : \
     parsing/location.cmi
 parsing/lexer.cmo : \
     utils/warnings.cmi \
-    parsing/parser.cmi \
     utils/misc.cmi \
     parsing/location.cmi \
     parsing/docstrings.cmi \
     parsing/lexer.cmi
 parsing/lexer.cmx : \
     utils/warnings.cmx \
-    parsing/parser.cmx \
     utils/misc.cmx \
     parsing/location.cmx \
     parsing/docstrings.cmx \
     parsing/lexer.cmi
 parsing/lexer.cmi : \
-    parsing/parser.cmi \
     parsing/location.cmi
 parsing/location.cmo : \
     utils/warnings.cmi \
@@ -325,48 +322,21 @@ parsing/longident.cmi :
 parsing/parse.cmo : \
     parsing/syntaxerr.cmi \
     parsing/pprintast.cmi \
-    parsing/parser.cmi \
     parsing/location.cmi \
     parsing/lexer.cmi \
     parsing/docstrings.cmi \
+    utils/clflags.cmi \
     parsing/parse.cmi
 parsing/parse.cmx : \
     parsing/syntaxerr.cmx \
     parsing/pprintast.cmx \
-    parsing/parser.cmx \
     parsing/location.cmx \
     parsing/lexer.cmx \
     parsing/docstrings.cmx \
+    utils/clflags.cmx \
     parsing/parse.cmi
 parsing/parse.cmi : \
     parsing/parsetree.cmi
-parsing/parser.cmo : \
-    parsing/syntaxerr.cmi \
-    parsing/parsetree.cmi \
-    parsing/longident.cmi \
-    parsing/location.cmi \
-    parsing/docstrings.cmi \
-    utils/clflags.cmi \
-    parsing/camlinternalMenhirLib.cmi \
-    parsing/asttypes.cmi \
-    parsing/ast_helper.cmi \
-    parsing/parser.cmi
-parsing/parser.cmx : \
-    parsing/syntaxerr.cmx \
-    parsing/parsetree.cmi \
-    parsing/longident.cmx \
-    parsing/location.cmx \
-    parsing/docstrings.cmx \
-    utils/clflags.cmx \
-    parsing/camlinternalMenhirLib.cmx \
-    parsing/asttypes.cmi \
-    parsing/ast_helper.cmx \
-    parsing/parser.cmi
-parsing/parser.cmi : \
-    parsing/parsetree.cmi \
-    parsing/location.cmi \
-    parsing/docstrings.cmi \
-    parsing/camlinternalMenhirLib.cmi
 parsing/parsetree.cmi : \
     parsing/longident.cmi \
     parsing/location.cmi \
@@ -1835,6 +1805,8 @@ bytecomp/printinstr.cmx : \
     bytecomp/printinstr.cmi
 bytecomp/printinstr.cmi : \
     bytecomp/instruct.cmi
+bytecomp/runtimedef.cmo :
+bytecomp/runtimedef.cmx :
 bytecomp/symtable.cmo : \
     lambda/runtimedef.cmi \
     typing/predef.cmi \
@@ -5479,6 +5451,7 @@ asmcomp/debug/reg_with_debug_info.cmx : \
 asmcomp/debug/reg_with_debug_info.cmi : \
     asmcomp/reg.cmi \
     middle_end/backend_var.cmi
+driver/compdynlink.cmi :
 driver/compenv.cmo : \
     utils/warnings.cmi \
     utils/profile.cmi \
@@ -5658,7 +5631,6 @@ driver/main_args.cmi :
 driver/makedepend.cmo : \
     driver/pparse.cmi \
     parsing/parsetree.cmi \
-    parsing/parser.cmi \
     parsing/parse.cmi \
     utils/misc.cmi \
     parsing/longident.cmi \
@@ -5672,7 +5644,6 @@ driver/makedepend.cmo : \
 driver/makedepend.cmx : \
     driver/pparse.cmx \
     parsing/parsetree.cmi \
-    parsing/parser.cmx \
     parsing/parse.cmx \
     utils/misc.cmx \
     parsing/longident.cmx \
