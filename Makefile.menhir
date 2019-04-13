@@ -59,8 +59,9 @@ unused_tokens := COMMENT DOCSTRING EOL GREATERRBRACKET
 
 ## Menhir compilation flags
 
-MENHIRFLAGS := --explain --dump --ocamlc "$(CAMLC) $(COMPFLAGS)" --infer \
+MENHIRFLAGS := --explain --dump --ocamlc "$(CAMLC) $(COMPFLAGS) -I parsing/" --infer \
 	--lalr --strict --table -lg 1 -la 1 \
+		--external-tokens 'Parser_tokens' \
         $(addprefix --unused-token ,$(unused_tokens)) --fixed-exception
 
 ## promote-menhir
@@ -68,13 +69,14 @@ MENHIRFLAGS := --explain --dump --ocamlc "$(CAMLC) $(COMPFLAGS)" --infer \
 .PHONY: promote-menhir
 promote-menhir: parsing/parser.mly parsing/safe_parser.mly
 	@ $(MAKE) import-menhirLib
+	$(MENHIR) --unused-tokens --only-tokens parsing/parser_tokens.mly
 	$(MENHIR) $(MENHIRFLAGS) parsing/parser.mly
 	$(MENHIR) $(MENHIRFLAGS) parsing/safe_parser.mly
 # The generated parser.ml may contain lexer directives containing
 # the absolute path to Menhir's standard library on the promoter's machine.
 # This is benign but will generate pointless churn if another developer
 # rebuilds the same grammar (from the same Menhir version).
-	@ for f in $(addprefix parser.,ml mli) $(addprefix safe_parser.,ml mli) ; do \
+	@ for f in parser_tokens.ml $(addprefix parser.,ml mli) $(addprefix safe_parser.,ml mli) ; do \
 	  sed \
 	    's,^#\(.*\)"[^"]*/menhir/standard.mly",#\1"menhir/standard.mly",g' \
 	    parsing/$$f \
@@ -98,7 +100,7 @@ import-menhirLib:
 
 ## demote-menhir
 
-DEMOTE:=menhirLib.ml menhirLib.mli parser.ml parser.mli safe_parser.ml safe_parser.mli
+DEMOTE:=menhirLib.ml menhirLib.mli parser_tokens.ml parser.ml parser.mli safe_parser.ml safe_parser.mli
 
 .PHONY: demote-menhir
 demote-menhir:

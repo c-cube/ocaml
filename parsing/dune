@@ -28,6 +28,14 @@
  (action  (copy# ../boot/menhir/menhirLib.mli %{targets})))
 
 (rule
+ (targets parser_tokens.ml)
+ (mode    fallback)
+ (deps    (:dep ../boot/menhir/parser_tokens.ml))
+ (action
+   (with-stdout-to %{targets}
+     (bash "cat %{dep} | sed 's/MenhirLib/CamlinternalMenhirLib/g'"))))
+
+(rule
  (targets parser.ml)
  (mode    fallback)
  (deps    (:dep ../boot/menhir/parser.ml))
@@ -46,7 +54,7 @@
 (rule
  (targets safe_parser.ml)
  (mode    fallback)
- (deps    (:dep ../boot/menhir/parser.ml))
+ (deps    (:dep ../boot/menhir/safe_parser.ml))
  (action
    (with-stdout-to %{targets}
      (bash "cat %{dep} | sed 's/MenhirLib/CamlinternalMenhirLib/g'"))))
@@ -54,7 +62,7 @@
 (rule
  (targets safe_parser.mli)
  (mode    fallback)
- (deps    (:dep ../boot/menhir/parser.mli))
+ (deps    (:dep ../boot/menhir/safe_parser.mli))
  (action
    (with-stdout-to %{targets}
      (bash "cat %{dep} | sed 's/MenhirLib/CamlinternalMenhirLib/g'"))))

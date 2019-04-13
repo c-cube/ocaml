@@ -1064,11 +1064,18 @@ parsing/camlinternalMenhirLib.mli: boot/menhir/menhirLib.mli
 
 # Copy parsing/parser.ml from boot/
 
-parsing/%parser.ml: boot/menhir/parser.ml parsing/%parser.mly \
+parsing/parser.ml: boot/menhir/parser.ml parsing/parser.mly \
   tools/check-parser-uptodate-or-warn.sh
 	@tools/check-parser-uptodate-or-warn.sh
 	cat $< | sed "s/MenhirLib/CamlinternalMenhirLib/g" > $@
-parsing/%parser.mli: boot/menhir/%parser.mli
+parsing/parser.mli: boot/menhir/parser.mli
+	cat $< | sed "s/MenhirLib/CamlinternalMenhirLib/g" > $@
+
+parsing/safe_parser.ml: boot/menhir/safe_parser.ml parsing/safe_parser.mly \
+  tools/check-parser-uptodate-or-warn.sh
+	@tools/check-parser-uptodate-or-warn.sh
+	cat $< | sed "s/MenhirLib/CamlinternalMenhirLib/g" > $@
+parsing/safe_parser.mli: boot/menhir/safe_parser.mli
 	cat $< | sed "s/MenhirLib/CamlinternalMenhirLib/g" > $@
 
 

@@ -17,6 +17,55 @@
 
 (* Skip tokens to the end of the phrase *)
 
+module type S = sig
+  exception Error
+  (* The monolithic API. *)
+
+  val use_file: (Lexing.lexbuf -> token) -> Lexing.lexbuf -> (Parsetree.toplevel_phrase list)
+
+  val toplevel_phrase: (Lexing.lexbuf -> token) -> Lexing.lexbuf -> (Parsetree.toplevel_phrase)
+
+  val parse_pattern: (Lexing.lexbuf -> token) -> Lexing.lexbuf -> (Parsetree.pattern)
+
+  val parse_expression: (Lexing.lexbuf -> token) -> Lexing.lexbuf -> (Parsetree.expression)
+
+  val parse_core_type: (Lexing.lexbuf -> token) -> Lexing.lexbuf -> (Parsetree.core_type)
+
+  val interface: (Lexing.lexbuf -> token) -> Lexing.lexbuf -> (Parsetree.signature)
+
+  val implementation: (Lexing.lexbuf -> token) -> Lexing.lexbuf -> (Parsetree.structure)
+
+  module MenhirInterpreter : sig
+    
+    (* The incremental API. *)
+    
+    include MenhirLib.IncrementalEngine.INCREMENTAL_ENGINE
+      with type token = token
+    
+  end
+
+  (* The entry point(s) to the incremental API. *)
+
+  module Incremental : sig
+    
+    val use_file: Lexing.position -> (Parsetree.toplevel_phrase list) MenhirInterpreter.checkpoint
+    
+    val toplevel_phrase: Lexing.position -> (Parsetree.toplevel_phrase) MenhirInterpreter.checkpoint
+    
+    val parse_pattern: Lexing.position -> (Parsetree.pattern) MenhirInterpreter.checkpoint
+    
+    val parse_expression: Lexing.position -> (Parsetree.expression) MenhirInterpreter.checkpoint
+    
+    val parse_core_type: Lexing.position -> (Parsetree.core_type) MenhirInterpreter.checkpoint
+    
+    val interface: Lexing.position -> (Parsetree.signature) MenhirInterpreter.checkpoint
+    
+    val implementation: Lexing.position -> (Parsetree.structure) MenhirInterpreter.checkpoint
+  end
+end
+
+module Make(Parser : S) = struct
+
 let last_token = ref Parser.EOF
 
 let token lexbuf =
@@ -109,20 +158,32 @@ let rec loop lexbuf in_error checkpoint =
   | I.HandlingError _ ->
       loop lexbuf true (I.resume checkpoint)
 
-let wrap_menhir unsafe_entry safe_entry lexbuf =
-  let entry = if ! Clflags.safe_syntax then safe_entry else unsafe_entry in
+let wrap_menhir entry lexbuf =
   let initial = entry lexbuf.Lexing.lex_curr_p in
   wrap (fun lexbuf -> loop lexbuf false initial) lexbuf
 
-let implementation = wrap_menhir Parser.Incremental.implementation Safe_parser.Incremental.implementation
-and interface = wrap_menhir Parser.Incremental.interface Safe_parser.Incremental.interface
-and toplevel_phrase = wrap_menhir Parser.Incremental.toplevel_phrase Safe_parser.Incremental.toplevel_phrase
-and use_file = wrap_menhir Parser.Incremental.use_file Safe_parser.Incremental.use_file
-and core_type = wrap_menhir Parser.Incremental.parse_core_type Safe_parser.Incremental.parse_core_type
-and expression = wrap_menhir Parser.Incremental.parse_expression Safe_parser.Incremental.parse_expression
-and pattern = wrap_menhir Parser.Incremental.parse_pattern Safe_parser.Incremental.parse_pattern
+let implementation = wrap_menhir Parser.Incremental.implementation
+and interface = wrap_menhir Parser.Incremental.interface
+and toplevel_phrase = wrap_menhir Parser.Incremental.toplevel_phrase
+and use_file = wrap_menhir Parser.Incremental.use_file
+and core_type = wrap_menhir Parser.Incremental.parse_core_type
+and expression = wrap_menhir Parser.Incremental.parse_expression
+and pattern = wrap_menhir Parser.Incremental.parse_pattern
+end
 
+module P = Make(Parser)
+module SP = Make(Safe_parser)
 
+let switch_ unsafe safe buf =
+  if ! Clflags.safe_syntax then safe buf else unsafe bug
+
+let implementation = switch_ P.implementation SP.implementation
+and interface = switch_ P.interface SP.interface
+and toplevel_phrase = switch_ P.toplevel_phrase SP.toplevel_phrase
+and use_file = switch_ P.use_file SP.use_file
+and core_type = switch_ P.parse_core_type SP.parse_core_type
+and expression = switch_ P.parse_expression SP.parse_expression
+and pattern = switch_ P.parse_pattern SP.parse_pattern
 
 (* Error reporting for Syntaxerr *)
 (* The code has been moved here so that one can reuse Pprintast.tyvar *)
