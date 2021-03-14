@@ -204,6 +204,7 @@ external string_blit : string -> int -> bytes -> int -> int -> unit
 external bytes_blit : bytes -> int -> bytes -> int -> int -> unit
                         = "caml_blit_bytes" [@@noalloc]
 external bytes_unsafe_to_string : bytes -> string = "%bytes_to_string"
+external bytes_unsafe_of_string : string -> bytes = "%bytes_of_string"
 
 let ( ^ ) s1 s2 =
   let l1 = string_length s1 and l2 = string_length s2 in
@@ -298,16 +299,33 @@ let rec ( @ ) l1 l2 =
 
 (* I/O operations *)
 
-type in_channel
-type out_channel
+type raw_in_channel
+type raw_out_channel
 
-external open_descriptor_out : int -> out_channel
+external open_descriptor_out : int -> raw_out_channel
                              = "caml_ml_open_descriptor_out"
-external open_descriptor_in : int -> in_channel = "caml_ml_open_descriptor_in"
+external open_descriptor_in : int -> raw_in_channel = "caml_ml_open_descriptor_in"
 
-let stdin = open_descriptor_in 0
-let stdout = open_descriptor_out 1
-let stderr = open_descriptor_out 2
+type in_channel =
+  | IC_raw of raw_in_channel
+  | IC_functions of {
+      read: bytes -> int -> int -> int;
+      read_char: unit -> char;
+      close: unit -> unit;
+    }
+
+type out_channel =
+  | OC_raw of raw_out_channel
+  | OC_functions of {
+      write: bytes -> int -> int -> unit;
+      write_char: char -> unit;
+      close: unit -> unit;
+      flush: unit -> unit;
+    }
+
+let stdin = IC_raw (open_descriptor_in 0)
+let stdout = OC_raw (open_descriptor_out 1)
+let stderr = OC_raw (open_descriptor_out 2)
 
 (* General output functions *)
 
@@ -318,23 +336,27 @@ type open_flag =
 
 external open_desc : string -> open_flag list -> int -> int = "caml_sys_open"
 
-external set_out_channel_name: out_channel -> string -> unit =
+external set_out_channel_name: raw_out_channel -> string -> unit =
   "caml_ml_set_channel_name"
 
-let open_out_gen mode perm name =
+let open_out_gen mode perm name : out_channel =
   let c = open_descriptor_out(open_desc name mode perm) in
   set_out_channel_name c name;
-  c
+  OC_raw c
 
-let open_out name =
+let open_out name : out_channel =
   open_out_gen [Open_wronly; Open_creat; Open_trunc; Open_text] 0o666 name
 
-let open_out_bin name =
+let open_out_bin name : out_channel =
   open_out_gen [Open_wronly; Open_creat; Open_trunc; Open_binary] 0o666 name
 
-external flush : out_channel -> unit = "caml_ml_flush"
+external raw_flush : raw_out_channel -> unit = "caml_ml_flush"
 
-external out_channels_list : unit -> out_channel list
+let flush = function
+  | OC_raw c -> raw_flush c
+  | OC_functions r -> r.flush()
+
+external raw_out_channels_list : unit -> raw_out_channel list
                            = "caml_ml_out_channels_list"
 
 let flush_all () =
@@ -342,63 +364,124 @@ let flush_all () =
       [] -> ()
     | a::l ->
         begin try
-            flush a
+            raw_flush a
         with Sys_error _ ->
           () (* ignore channels closed during a preceding flush. *)
         end;
         iter l
-  in iter (out_channels_list ())
+  in iter (raw_out_channels_list ())
 
-external unsafe_output : out_channel -> bytes -> int -> int -> unit
+external raw_unsafe_output : raw_out_channel -> bytes -> int -> int -> unit
                        = "caml_ml_output_bytes"
-external unsafe_output_string : out_channel -> string -> int -> int -> unit
+external raw_unsafe_output_string : raw_out_channel -> string -> int -> int -> unit
                               = "caml_ml_output"
 
-external output_char : out_channel -> char -> unit = "caml_ml_output_char"
+external raw_output_char : raw_out_channel -> char -> unit = "caml_ml_output_char"
+
+let output_char oc c = match oc with
+  | OC_raw oc -> raw_output_char oc c
+  | OC_functions r -> r.write_char c
 
 let output_bytes oc s =
-  unsafe_output oc s 0 (bytes_length s)
+  match oc with
+  | OC_raw oc -> raw_unsafe_output oc s 0 (bytes_length s)
+  | OC_functions r -> r.write s 0 (bytes_length s)
 
 let output_string oc s =
-  unsafe_output_string oc s 0 (string_length s)
+  match oc with
+  | OC_raw oc -> raw_unsafe_output_string oc s 0 (string_length s)
+  | OC_functions r -> r.write (bytes_unsafe_to_string s) 0 (string_length s)
 
 let output oc s ofs len =
-  if ofs < 0 || len < 0 || ofs > bytes_length s - len
-  then invalid_arg "output"
-  else unsafe_output oc s ofs len
+  match oc with
+  | OC_raw oc ->
+    if ofs < 0 || len < 0 || ofs > bytes_length s - len
+    then invalid_arg "output"
+    else raw_unsafe_output oc s ofs len
+  | OC_functions r -> r.write s ofs len
 
 let output_substring oc s ofs len =
-  if ofs < 0 || len < 0 || ofs > string_length s - len
-  then invalid_arg "output_substring"
-  else unsafe_output_string oc s ofs len
+  match oc with
+  | OC_raw oc ->
+    if ofs < 0 || len < 0 || ofs > string_length s - len
+    then invalid_arg "output_substring"
+    else raw_unsafe_output_string oc s ofs len
+  | OC_functions r ->
+    r.write (bytes_unsafe_to_string s) ofs len
 
-external output_byte : out_channel -> int -> unit = "caml_ml_output_char"
-external output_binary_int : out_channel -> int -> unit = "caml_ml_output_int"
+external raw_output_byte : raw_out_channel -> int -> unit = "caml_ml_output_char"
 
-external marshal_to_channel : out_channel -> 'a -> unit list -> unit
+let output_byte oc c = match oc with
+  | OC_raw oc -> raw_output_byte oc c
+  | OC_functions r ->
+    let c = char_of_int (c land 0xff) in
+    r.write_char c
+
+external raw_output_binary_int : raw_out_channel -> int -> unit = "caml_ml_output_int"
+
+let output_binary_int oc i = match oc with
+  | OC_raw oc -> raw_output_binary_int oc i
+  | OC_functions r ->
+    assert false
+(* FIXME: use a Buffer or Bytes function? *)
+
+external raw_marshal_to_channel : raw_out_channel -> 'a -> unit list -> unit
      = "caml_output_value"
-let output_value chan v = marshal_to_channel chan v []
+external raw_marshal_to_bytes : 'a -> unit list -> bytes
+    = "caml_output_value_to_bytes"
 
-external seek_out : out_channel -> int -> unit = "caml_ml_seek_out"
-external pos_out : out_channel -> int = "caml_ml_pos_out"
-external out_channel_length : out_channel -> int = "caml_ml_channel_size"
-external close_out_channel : out_channel -> unit = "caml_ml_close_channel"
-let close_out oc = flush oc; close_out_channel oc
-let close_out_noerr oc =
-  (try flush oc with _ -> ());
-  (try close_out_channel oc with _ -> ())
-external set_binary_mode_out : out_channel -> bool -> unit
+let output_value chan v = match chan with
+  | OC_raw chan -> raw_marshal_to_channel chan v []
+  | OC_functions r ->
+    let buf = raw_marshal_to_bytes v [] in
+    r.write buf 0 (bytes_length buf)
+
+external raw_seek_out : raw_out_channel -> int -> unit = "caml_ml_seek_out"
+external raw_pos_out : raw_out_channel -> int = "caml_ml_pos_out"
+external raw_out_channel_length : raw_out_channel -> int = "caml_ml_channel_size"
+external raw_close_out_channel : raw_out_channel -> unit = "caml_ml_close_channel"
+
+let seek_out oc i = match oc with
+  | OC_raw oc -> raw_seek_out oc i
+  | OC_functions _ -> ()
+
+let pos_out = function
+  | OC_raw oc -> raw_pos_out oc
+  | OC_functions _ -> 0
+
+let out_channel_length = function
+  | OC_raw oc -> raw_out_channel_length oc
+  | OC_functions _ -> -1
+
+let close_out = function
+  | OC_raw oc -> raw_flush oc; raw_close_out_channel oc
+  | OC_functions r -> r.flush(); r.close()
+
+let close_out_noerr = function
+  | OC_raw oc ->
+    (try raw_flush oc with _ -> ());
+    (try raw_close_out_channel oc with _ -> ())
+  | OC_functions r ->
+    (try r.flush () with _ -> ());
+    (try r.close() with _ -> ())
+
+external raw_set_binary_mode_out : raw_out_channel -> bool -> unit
                              = "caml_ml_set_binary_mode"
+
+let set_binary_mode_out oc b =
+  match oc with
+  | OC_raw oc -> raw_set_binary_mode_out oc b
+  | OC_functions _ -> ()
 
 (* General input functions *)
 
-external set_in_channel_name: in_channel -> string -> unit =
+external set_in_channel_name: raw_in_channel -> string -> unit =
   "caml_ml_set_channel_name"
 
 let open_in_gen mode perm name =
   let c = open_descriptor_in(open_desc name mode perm) in
   set_in_channel_name c name;
-  c
+  IC_raw c
 
 let open_in name =
   open_in_gen [Open_rdonly; Open_text] 0 name
@@ -406,7 +489,11 @@ let open_in name =
 let open_in_bin name =
   open_in_gen [Open_rdonly; Open_binary] 0 name
 
-external input_char : in_channel -> char = "caml_ml_input_char"
+external raw_input_char : raw_in_channel -> char = "caml_ml_input_char"
+
+let input_char = function
+  | IC_raw ic -> raw_input_char ic
+  | IC_functions r -> r.read_char()
 
 external unsafe_input : in_channel -> bytes -> int -> int -> int
                       = "caml_ml_input"
@@ -464,16 +551,20 @@ let input_line chan =
     end
   in bytes_unsafe_to_string (scan [] 0)
 
-external input_byte : in_channel -> int = "caml_ml_input_char"
-external input_binary_int : in_channel -> int = "caml_ml_input_int"
-external input_value : in_channel -> 'a = "caml_input_value"
-external seek_in : in_channel -> int -> unit = "caml_ml_seek_in"
-external pos_in : in_channel -> int = "caml_ml_pos_in"
-external in_channel_length : in_channel -> int = "caml_ml_channel_size"
-external close_in : in_channel -> unit = "caml_ml_close_channel"
+external raw_input_byte : raw_in_channel -> int = "caml_ml_input_char"
+external raw_input_binary_int : raw_in_channel -> int = "caml_ml_input_int"
+external raw_input_value : raw_in_channel -> 'a = "caml_input_value"
+external raw_seek_in : raw_in_channel -> int -> unit = "caml_ml_seek_in"
+external raw_pos_in : raw_in_channel -> int = "caml_ml_pos_in"
+external raw_in_channel_length : raw_in_channel -> int = "caml_ml_channel_size"
+external close_in : raw_in_channel -> unit = "caml_ml_close_channel"
 let close_in_noerr ic = (try close_in ic with _ -> ())
-external set_binary_mode_in : in_channel -> bool -> unit
+external set_binary_mode_in : raw_in_channel -> bool -> unit
                             = "caml_ml_set_binary_mode"
+
+let input_byte = function
+  | IC_raw ic -> int_of_char (raw_input_byte ic)
+  | IC_functions r -> r.read_char()
 
 (* Output functions on standard output *)
 
@@ -509,13 +600,28 @@ let read_float_opt () = float_of_string_opt(read_line())
 
 module LargeFile =
   struct
-    external seek_out : out_channel -> int64 -> unit = "caml_ml_seek_out_64"
-    external pos_out : out_channel -> int64 = "caml_ml_pos_out_64"
-    external out_channel_length : out_channel -> int64
+    external raw_seek_out : raw_out_channel -> int64 -> unit = "caml_ml_seek_out_64"
+    external raw_pos_out : raw_out_channel -> int64 = "caml_ml_pos_out_64"
+    external raw_out_channel_length : raw_out_channel -> int64
                                 = "caml_ml_channel_size_64"
-    external seek_in : in_channel -> int64 -> unit = "caml_ml_seek_in_64"
-    external pos_in : in_channel -> int64 = "caml_ml_pos_in_64"
-    external in_channel_length : in_channel -> int64 = "caml_ml_channel_size_64"
+
+    let seek_out oc i = match oc with
+      | OC_raw oc -> raw_seek_out oc i
+      | OC_functions _ -> ()
+
+    let pos_out = function
+      | OC_raw oc -> raw_pos_out oc
+      | OC_functions _ -> 0L
+
+    let out_channel_length = function
+      | OC_raw oc -> raw_out_channel_length oc
+      | OC_functions _ -> -1L
+
+    external raw_seek_in : raw_in_channel -> int64 -> unit = "caml_ml_seek_in_64"
+    external raw_pos_in : raw_in_channel -> int64 = "caml_ml_pos_in_64"
+    external raw_in_channel_length : raw_in_channel -> int64 = "caml_ml_channel_size_64"
+
+
   end
 
 (* Formats *)
