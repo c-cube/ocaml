@@ -390,7 +390,7 @@ let output_bytes oc s =
 let output_string oc s =
   match oc with
   | OC_raw oc -> raw_unsafe_output_string oc s 0 (string_length s)
-  | OC_functions r -> r.write (bytes_unsafe_to_string s) 0 (string_length s)
+  | OC_functions r -> r.write (bytes_unsafe_of_string s) 0 (string_length s)
 
 let output oc s ofs len =
   match oc with
@@ -407,7 +407,7 @@ let output_substring oc s ofs len =
     then invalid_arg "output_substring"
     else raw_unsafe_output_string oc s ofs len
   | OC_functions r ->
-    r.write (bytes_unsafe_to_string s) ofs len
+    r.write (bytes_unsafe_of_string s) ofs len
 
 external raw_output_byte : raw_out_channel -> int -> unit = "caml_ml_output_char"
 
