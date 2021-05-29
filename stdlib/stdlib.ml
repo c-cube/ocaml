@@ -557,14 +557,40 @@ external raw_input_value : raw_in_channel -> 'a = "caml_input_value"
 external raw_seek_in : raw_in_channel -> int -> unit = "caml_ml_seek_in"
 external raw_pos_in : raw_in_channel -> int = "caml_ml_pos_in"
 external raw_in_channel_length : raw_in_channel -> int = "caml_ml_channel_size"
-external close_in : raw_in_channel -> unit = "caml_ml_close_channel"
-let close_in_noerr ic = (try close_in ic with _ -> ())
+external raw_close_in : raw_in_channel -> unit = "caml_ml_close_channel"
 external set_binary_mode_in : raw_in_channel -> bool -> unit
                             = "caml_ml_set_binary_mode"
 
 let input_byte = function
-  | IC_raw ic -> int_of_char (raw_input_byte ic)
-  | IC_functions r -> r.read_char()
+  | IC_raw ic -> raw_input_byte ic
+  | IC_functions r -> int_of_char (r.read_char())
+
+    let in_channel_length = function
+      | IC_raw ic -> raw_in_channel_length ic
+| IC_functions _r -> -1 (* TODO: 0 or -1 ? *)
+
+let pos_in = function
+| IC_raw ic -> raw_pos_in ic
+| IC_functions _r -> -1 (* TODO: 0 or -1 ? *)
+
+let seek_in c n =
+match c with
+| IC_raw ic -> raw_seek_in ic n
+| IC_functions _r -> () (* TODO *)
+
+let input_value = function
+| IC_raw ic -> raw_input_value ic
+| IC_functions _r -> failwith "TODO" (* TODO *)
+
+let input_binary_int = function
+| IC_raw ic -> raw_input_binary_int ic
+| IC_functions _r -> 0 (* TODO *)
+
+let close_in = function
+| IC_raw ic -> raw_close_in ic
+| IC_functions r -> r.close ()
+
+let close_in_noerr ic = (try close_in ic with _ -> ())
 
 (* Output functions on standard output *)
 
@@ -620,7 +646,6 @@ module LargeFile =
     external raw_seek_in : raw_in_channel -> int64 -> unit = "caml_ml_seek_in_64"
     external raw_pos_in : raw_in_channel -> int64 = "caml_ml_pos_in_64"
     external raw_in_channel_length : raw_in_channel -> int64 = "caml_ml_channel_size_64"
-
 
   end
 
