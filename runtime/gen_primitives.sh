@@ -52,6 +52,18 @@ tmp_primitives="$primitives.tmp$$"
 sed -n -e 's/^CAMLprim value \([a-z][a-z0-9_]*\).*$/\1/p' "$@" | \
 sort | tr -d '\r' | uniq > "$tmp_primitives"
 
+# If a runtime/primitives_exclude file exists next to the primitives file,
+# remove those names from the output.  This allows backward-compat stub
+# functions to remain as CAMLprim (so old boot/ocamlc can load them) without
+# polluting the primitives list seen by new builds.
+primitives_dir="$(dirname "$primitives")"
+exclude_file="$primitives_dir/primitives_exclude"
+if [ -f "$exclude_file" ]; then
+  grep -vxF -f "$exclude_file" "$tmp_primitives" > "$tmp_primitives.filtered$$" \
+    && mv "$tmp_primitives.filtered$$" "$tmp_primitives" \
+    || rm -f "$tmp_primitives.filtered$$"
+fi
+
 # To speed up builds, we avoid changing "primitives" when files
 # containing primitives change but the primitives table does not
 

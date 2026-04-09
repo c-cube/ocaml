@@ -52,16 +52,39 @@ sed \
   -e 's/^CAMLprim /CAMLextern /' \
   -e 's/).*$/);/'
 
+# If a runtime/primitives_exclude file exists, those names are backward-compat
+# stubs: they are not in the main primitives table but must still be registered
+# so that old boot/ocamlc binaries can be loaded.  We map their names to a
+# single stub function that calls caml_fatal_error.
+primitives_dir="$(dirname "$primitives")"
+exclude_file="$primitives_dir/primitives_exclude"
+if [ -f "$exclude_file" ] && [ -s "$exclude_file" ]; then
+cat <<'EOFSUB'
+
+/* Backward-compat stub: mapped to excluded primitive names below */
+static value caml_boot_compat_stub(void)
+{
+  caml_fatal_error("obsolete C primitive called after IO rewrite");
+}
+EOFSUB
+fi
+
 # Generate the table of primitives
 echo
 echo 'const c_primitive caml_builtin_cprim[] = {'
 sed -e 's/.*/  (c_primitive) &,/' "$primitives"
+if [ -f "$exclude_file" ] && [ -s "$exclude_file" ]; then
+  sed -e 's/.*/  (c_primitive) caml_boot_compat_stub,/' "$exclude_file"
+fi
 echo '  0 };'
 
 # Generate the table of primitive names
 echo
 echo 'const char * const caml_names_of_builtin_cprim[] = {'
 sed -e 's/.*/  "&",/' "$primitives"
+if [ -f "$exclude_file" ] && [ -s "$exclude_file" ]; then
+  sed -e 's/.*/  "&",/' "$exclude_file"
+fi
 echo '  0 };'
 
 # ocamlrun values for symbols which are provided by the bytecode linker
