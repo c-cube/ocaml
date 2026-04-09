@@ -808,6 +808,20 @@ type in_channel
 type out_channel
 (** The type of output channel. *)
 
+val open_descriptor_in : int -> in_channel
+(** Create an input channel from a raw file descriptor. *)
+
+val open_descriptor_out : int -> out_channel
+(** Create an output channel from a raw file descriptor. *)
+
+val in_channel_fd : in_channel -> int
+(** Return the file descriptor underlying an input channel.
+    @raise Invalid_argument if the channel is not backed by a file descriptor. *)
+
+val out_channel_fd : out_channel -> int
+(** Return the file descriptor underlying an output channel.
+    @raise Invalid_argument if the channel is not backed by a file descriptor. *)
+
 val stdin : in_channel
 (** The standard input for the process. *)
 
@@ -1168,6 +1182,18 @@ val set_binary_mode_in : in_channel -> bool -> unit
    end-of-lines will be translated from [\r\n] to [\n].
    This function has no effect under operating systems that
    do not distinguish between text mode and binary mode. *)
+
+val in_channel_is_binary_mode : in_channel -> bool
+(** [in_channel_is_binary_mode ic] returns [true] if [ic] is in binary mode. *)
+
+val in_channel_isatty : in_channel -> bool
+(** [in_channel_isatty ic] returns [true] if [ic] is connected to a terminal. *)
+
+val out_channel_is_binary_mode : out_channel -> bool
+(** [out_channel_is_binary_mode oc] returns [true] if [oc] is in binary mode. *)
+
+val out_channel_isatty : out_channel -> bool
+(** [out_channel_isatty oc] returns [true] if [oc] is connected to a terminal. *)
 
 
 (** {2 Operations on large files} *)

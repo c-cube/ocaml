@@ -1214,6 +1214,7 @@ runtime_COMMON_C_SOURCES = \
   bigarray \
   blake2 \
   callback \
+  channel_stubs \
   codefrag \
   compare \
   custom \
@@ -1231,7 +1232,7 @@ runtime_COMMON_C_SOURCES = \
   hash \
   intern \
   ints \
-  io \
+  c_io \
   lexing \
   lf_skiplist \
   main \

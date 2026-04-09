@@ -818,21 +818,32 @@ CAMLprim value caml_sys_read_directory(value path)
   CAMLreturn(result);
 }
 
-/* Return true if the value is a filedescriptor (int) that is
- * (presumably) open on an interactive terminal */
+/* Bootstrap compatibility stub: old code passes an out_channel.
+   Old-style channels were Custom_tag blocks; new-style Out_ch are regular blocks
+   with layout [buf; ops; st; closed] where st = fd_state [fd; flags; binary; name].
+   We extract the fd from the new-style channel layout.  If we can't determine
+   the fd safely, we return false. */
 CAMLprim value caml_sys_isatty(value chan)
 {
   int fd;
-  value ret;
 
-  fd = (Channel(chan))->fd;
+  if (Is_block(chan) && Tag_val(chan) < No_scan_tag
+      && Wosize_val(chan) >= 3) {
+    /* New-style Out_ch or In_ch: st = Field(chan, 2) */
+    value st = Field(chan, 2);
+    if (Is_block(st) && Tag_val(st) < No_scan_tag && Wosize_val(st) >= 1) {
+      value vfd = Field(st, 0);
+      if (Is_long(vfd)) {
+        fd = Int_val(vfd);
 #ifdef _WIN32
-  ret = Val_bool(caml_win32_isatty(fd));
+        return Val_bool(caml_win32_isatty(fd));
 #else
-  ret = Val_bool(isatty(fd));
+        return Val_bool(isatty(fd));
 #endif
-
-  return ret;
+      }
+    }
+  }
+  return Val_false;
 }
 
 /* On Windows, returns a string list of directories to search for configuration

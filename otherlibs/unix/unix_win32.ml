@@ -326,14 +326,17 @@ let single_write_substring fd buf ofs len =
 
 (* Interfacing with the standard input/output library *)
 
-external in_channel_of_descr: file_descr -> in_channel
-   = "caml_unix_inchannel_of_filedescr"
-external out_channel_of_descr: file_descr -> out_channel
-   = "caml_unix_outchannel_of_filedescr"
-external descr_of_in_channel : in_channel -> file_descr
-   = "caml_unix_filedescr_of_channel"
-external descr_of_out_channel : out_channel -> file_descr
-   = "caml_unix_filedescr_of_channel"
+let in_channel_of_descr (fd : file_descr) : in_channel =
+  Stdlib.open_descriptor_in (fd :> int)
+
+let out_channel_of_descr (fd : file_descr) : out_channel =
+  Stdlib.open_descriptor_out (fd :> int)
+
+let descr_of_in_channel (ic : in_channel) : file_descr =
+  Stdlib.in_channel_fd ic
+
+let descr_of_out_channel (oc : out_channel) : file_descr =
+  Stdlib.out_channel_fd oc
 
 (* Seeking and truncating *)
 
