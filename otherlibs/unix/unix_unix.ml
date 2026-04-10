@@ -955,30 +955,15 @@ type popen_process =
   | Process_out of out_channel
   | Process_full of in_channel * out_channel * in_channel
 
-(* The popen_process hashtable keys are channel objects.
-   Since in_channel/out_channel contain mutable fields and function-valued
-   fields, we cannot use OCaml's polymorphic (=) or hash on them.
-   Instead, we key on the underlying file descriptor(s), which are stable
-   integers and uniquely identify each open channel. *)
-type popen_key =
-  | K_in of file_descr
-  | K_out of file_descr
-  | K_in_out of file_descr * file_descr
-  | K_in_out_err of file_descr * file_descr * file_descr
-
+(* Key on stable channel id (unique int) rather than channel objects,
+   because Hashtbl.hash on channels traverses mutable buffer fields. *)
 let popen_key_of_process = function
-  | Process_in ic ->
-    K_in (descr_of_in_channel ic)
-  | Process_out oc ->
-    K_out (descr_of_out_channel oc)
-  | Process (ic, oc) ->
-    K_in_out (descr_of_in_channel ic, descr_of_out_channel oc)
-  | Process_full (ic, oc, ec) ->
-    K_in_out_err (descr_of_in_channel ic, descr_of_out_channel oc,
-                  descr_of_in_channel ec)
+  | Process_in ic -> Stdlib.in_channel_id ic
+  | Process_out oc -> Stdlib.out_channel_id oc
+  | Process (ic, _) -> Stdlib.in_channel_id ic
+  | Process_full (ic, _, _) -> Stdlib.in_channel_id ic
 
-(* Association list of (popen_key, pid) pairs *)
-let popen_processes : (popen_key * int) list ref = ref []
+let popen_processes = (Hashtbl.create 7 : (int, int) Hashtbl.t)
 let popen_mutex = Mutex.create ()
 
 let open_proc prog args envopt proc input output error =
@@ -986,7 +971,7 @@ let open_proc prog args envopt proc input output error =
     create_process_gen prog args envopt input output error in
   let key = popen_key_of_process proc in
   Mutex.protect popen_mutex (fun () ->
-    popen_processes := (key, pid) :: !popen_processes)
+    Hashtbl.add popen_processes key pid)
 
 let open_process_args_in prog args =
   let (in_read, in_write) = pipe ~cloexec:true () in
@@ -1078,7 +1063,7 @@ let find_proc_id fun_name proc =
   let key = popen_key_of_process proc in
   try
     Mutex.protect popen_mutex (fun () ->
-      snd (List.find (fun (k, _) -> k = key) !popen_processes)
+      Hashtbl.find popen_processes key
     )
   with Not_found ->
     raise(Unix_error(EBADF, fun_name, ""))
@@ -1086,8 +1071,7 @@ let find_proc_id fun_name proc =
 let remove_proc_id proc =
   let key = popen_key_of_process proc in
   Mutex.protect popen_mutex (fun () ->
-    popen_processes :=
-      List.filter (fun (k, _) -> k <> key) !popen_processes
+    Hashtbl.remove popen_processes key
   )
 
 let process_in_pid inchan =

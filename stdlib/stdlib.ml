@@ -626,6 +626,12 @@ let out_channel_fd (oc : out_channel) : int =
   | Some f -> f r.st
   | None -> invalid_arg "out_channel_fd: not a file-descriptor channel"
 
+let in_channel_id (ic : in_channel) : int =
+  let (In_ch r) = ic in r.id
+
+let out_channel_id (oc : out_channel) : int =
+  let (Out_ch r) = oc in r.id
+
 (* ---- Standard channels ---- *)
 
 let stdin  = make_fd_in_channel  0 0 false None
