@@ -83,10 +83,8 @@ let set_binary_mode = Stdlib.set_binary_mode_out
 
 let is_binary_mode = Stdlib.out_channel_is_binary_mode
 
-(* The new pure-OCaml channels are always buffered.
-   set_buffered is a no-op; is_buffered always returns true. *)
-let set_buffered _oc _b = ()
+let set_buffered = Stdlib.set_buffered_out
 
-let is_buffered _oc = true
+let is_buffered = Stdlib.is_buffered_out
 
 let isatty = Stdlib.out_channel_isatty

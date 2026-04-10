@@ -428,6 +428,7 @@ type fd_state = {
   fd: int;
   flags: int;  (* 0 on Unix; CHANNEL_FLAG_FROM_SOCKET on Windows *)
   mutable binary: bool;
+  mutable buffered: bool;
   mutable name: string option;
 }
 [@@@warning "+69"]
@@ -445,6 +446,8 @@ type 'st out_ops = {
   out_isatty: ('st -> bool) option;
   out_is_binary: ('st -> bool) option;
   out_get_fd: ('st -> int) option;
+  out_set_buffered: 'st -> bool -> unit;
+  out_is_buffered: 'st -> bool;
 }
 
 type out_channel = Out_ch : {
@@ -513,6 +516,8 @@ let fd_out_ops : fd_state out_ops = {
   out_isatty = Some (fun st -> raw_isatty st.fd);
   out_is_binary = Some (fun st -> st.binary);
   out_get_fd = Some (fun st -> st.fd);
+  out_set_buffered = (fun st b -> st.buffered <- b);
+  out_is_buffered = (fun st -> st.buffered);
 }
 
 let fd_in_ops : fd_state in_ops = {
@@ -541,7 +546,7 @@ let fd_in_ops : fd_state in_ops = {
 (* ---- Channel constructors ---- *)
 
 let make_fd_out_channel fd flags binary name =
-  let st = { fd; flags; binary; name } in
+  let st = { fd; flags; binary; buffered = true; name } in
   let oc = Out_ch { buf = make_chan_buffer (); ops = fd_out_ops;
                     st; closed = false } in
   register_out_channel oc;
@@ -549,7 +554,7 @@ let make_fd_out_channel fd flags binary name =
 
 let make_fd_in_channel fd flags binary name =
   In_ch { buf = make_chan_buffer (); ops = fd_in_ops;
-          st = { fd; flags; binary; name }; closed = false }
+          st = { fd; flags; binary; buffered = true; name }; closed = false }
 
 (* ---- Public constructors for fd-backed channels ---- *)
 
@@ -616,7 +621,8 @@ let output_char (oc : out_channel) (c : char) =
     let cap = ba_dim r.buf.bs in
     if r.buf.off + r.buf.len >= cap then flush_buf oc;
     ba_unsafe_set r.buf.bs (r.buf.off + r.buf.len) c;
-    r.buf.len <- r.buf.len + 1)
+    r.buf.len <- r.buf.len + 1;
+    if not (r.ops.out_is_buffered r.st) then flush_buf oc)
 
 let output_byte (oc : out_channel) (n : int) =
   output_char oc (unsafe_char_of_int (n land 0xFF))
@@ -637,7 +643,8 @@ let output (oc : out_channel) (s : bytes) (ofs : int) (len : int) =
       r.buf.len <- r.buf.len + n;
       i := !i + n;
       remaining := !remaining - n
-    done)
+    done;
+    if not (r.ops.out_is_buffered r.st) then flush_buf oc)
 
 let output_substring (oc : out_channel) (s : string) (ofs : int) (len : int) =
   if ofs < 0 || len < 0 || ofs > string_length s - len
@@ -721,6 +728,17 @@ let out_channel_is_binary_mode (oc : out_channel) =
   match r.ops.out_is_binary with
   | None -> false
   | Some f -> f r.st
+
+let set_buffered_out (oc : out_channel) (b : bool) =
+  let (Out_ch r) = oc in
+  with_chan_lock r.buf.mutex (fun () ->
+    if r.closed then raise (Sys_error "set_buffered: channel is closed");
+    if not b then flush_buf oc;
+    r.ops.out_set_buffered r.st b)
+
+let is_buffered_out (oc : out_channel) : bool =
+  let (Out_ch r) = oc in
+  r.ops.out_is_buffered r.st
 
 (* ---- open_out ---- *)
 

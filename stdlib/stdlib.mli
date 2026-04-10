@@ -1195,6 +1195,12 @@ val out_channel_is_binary_mode : out_channel -> bool
 val out_channel_isatty : out_channel -> bool
 (** [out_channel_isatty oc] returns [true] if [oc] is connected to a terminal. *)
 
+val set_buffered_out : out_channel -> bool -> unit
+(** [set_buffered_out oc b] sets the buffered mode of [oc]. *)
+
+val is_buffered_out : out_channel -> bool
+(** [is_buffered_out oc] returns whether [oc] is in buffered mode. *)
+
 
 (** {2 Operations on large files} *)
 
