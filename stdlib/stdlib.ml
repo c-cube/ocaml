@@ -465,7 +465,25 @@ type 'st out_ops = {
   out_is_buffered: 'st -> bool;
 }
 
+(* Polymorphic equality (=) on channels:
+   - Same channel (physically equal): the runtime's == fast path returns true
+     immediately without inspecting any fields.
+   - Distinct channels: [id] is the first field (an unboxed int), so (=)
+     compares it first.  Since every channel gets a unique id, the comparison
+     returns false at once — we never reach the vtable closures (which would
+     raise "compare: functional value"). *)
+
+let next_channel_id_ = Atomic_.make 0
+
+let fresh_channel_id_ () =
+  let rec loop () =
+    let old = Atomic_.get next_channel_id_ in
+    if Atomic_.compare_and_set next_channel_id_ old (old + 1) then old
+    else loop ()
+  in loop ()
+
 type out_channel = Out_ch : {
+  id: int;
   buf: chan_buffer;
   ops: 'st out_ops;
   st: 'st;
@@ -487,6 +505,7 @@ type 'st in_ops = {
 }
 
 type in_channel = In_ch : {
+  id: int;
   buf: chan_buffer;
   ops: 'st in_ops;
   st: 'st;
@@ -578,13 +597,13 @@ let make_fd_state fd flags binary name =
 
 let make_fd_out_channel fd flags binary name =
   let st = make_fd_state fd flags binary name in
-  let oc = Out_ch { buf = make_chan_buffer (); ops = fd_out_ops;
-                    st; closed = false } in
+  let oc = Out_ch { id = fresh_channel_id_ (); buf = make_chan_buffer ();
+                    ops = fd_out_ops; st; closed = false } in
   register_out_channel oc;
   oc
 
 let make_fd_in_channel fd flags binary name =
-  In_ch { buf = make_chan_buffer (); ops = fd_in_ops;
+  In_ch { id = fresh_channel_id_ (); buf = make_chan_buffer (); ops = fd_in_ops;
           st = make_fd_state fd flags binary name; closed = false }
 
 (* ---- Public constructors for fd-backed channels ---- *)
