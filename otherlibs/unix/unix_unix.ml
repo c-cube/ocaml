@@ -306,11 +306,9 @@ let single_write_substring fd buf ofs len =
 
 (* Interfacing with the standard input/output library *)
 
-let in_channel_of_descr (fd : file_descr) : in_channel =
-  Stdlib.open_descriptor_in (fd :> int)
-
-let out_channel_of_descr (fd : file_descr) : out_channel =
-  Stdlib.open_descriptor_out (fd :> int)
+(* descr_of_in/out_channel are placed here because they are simple;
+   in_channel_of_descr and out_channel_of_descr are defined later, after
+   getsockopt, because they need to check stream semantics. *)
 
 let descr_of_in_channel (ic : in_channel) : file_descr =
   Stdlib.in_channel_fd ic
@@ -727,6 +725,21 @@ let setsockopt_float fd opt v = SO.set SO.float fd opt v
 
 let getsockopt_error fd = SO.get SO.error fd SO_ERROR
 
+(* Check that a file descriptor has "stream semantics" and can therefore
+   be used as part of buffered I/O.  Things that don't have "stream
+   semantics" include block devices and UDP (datagram) sockets.
+   Raises Unix_error on failure, returns unit on success. *)
+external check_stream_semantics : file_descr -> string -> unit
+  = "caml_unix_check_stream_semantics"
+
+let in_channel_of_descr (fd : file_descr) : in_channel =
+  check_stream_semantics fd "in_channel_of_descr";
+  Stdlib.open_descriptor_in (fd :> int)
+
+let out_channel_of_descr (fd : file_descr) : out_channel =
+  check_stream_semantics fd "out_channel_of_descr";
+  Stdlib.open_descriptor_out (fd :> int)
+
 (* Host and protocol databases *)
 
 type host_entry =
@@ -942,14 +955,38 @@ type popen_process =
   | Process_out of out_channel
   | Process_full of in_channel * out_channel * in_channel
 
-let popen_processes = (Hashtbl.create 7 : (popen_process, int) Hashtbl.t)
+(* The popen_process hashtable keys are channel objects.
+   Since in_channel/out_channel contain mutable fields and function-valued
+   fields, we cannot use OCaml's polymorphic (=) or hash on them.
+   Instead, we key on the underlying file descriptor(s), which are stable
+   integers and uniquely identify each open channel. *)
+type popen_key =
+  | K_in of file_descr
+  | K_out of file_descr
+  | K_in_out of file_descr * file_descr
+  | K_in_out_err of file_descr * file_descr * file_descr
+
+let popen_key_of_process = function
+  | Process_in ic ->
+    K_in (descr_of_in_channel ic)
+  | Process_out oc ->
+    K_out (descr_of_out_channel oc)
+  | Process (ic, oc) ->
+    K_in_out (descr_of_in_channel ic, descr_of_out_channel oc)
+  | Process_full (ic, oc, ec) ->
+    K_in_out_err (descr_of_in_channel ic, descr_of_out_channel oc,
+                  descr_of_in_channel ec)
+
+(* Association list of (popen_key, pid) pairs *)
+let popen_processes : (popen_key * int) list ref = ref []
 let popen_mutex = Mutex.create ()
 
 let open_proc prog args envopt proc input output error =
   let pid =
     create_process_gen prog args envopt input output error in
+  let key = popen_key_of_process proc in
   Mutex.protect popen_mutex (fun () ->
-    Hashtbl.add popen_processes proc pid)
+    popen_processes := (key, pid) :: !popen_processes)
 
 let open_process_args_in prog args =
   let (in_read, in_write) = pipe ~cloexec:true () in
@@ -1038,16 +1075,19 @@ let open_process_full cmd =
   open_process_shell open_process_args_full cmd
 
 let find_proc_id fun_name proc =
+  let key = popen_key_of_process proc in
   try
     Mutex.protect popen_mutex (fun () ->
-      Hashtbl.find popen_processes proc
+      snd (List.find (fun (k, _) -> k = key) !popen_processes)
     )
   with Not_found ->
     raise(Unix_error(EBADF, fun_name, ""))
 
 let remove_proc_id proc =
+  let key = popen_key_of_process proc in
   Mutex.protect popen_mutex (fun () ->
-    Hashtbl.remove popen_processes proc
+    popen_processes :=
+      List.filter (fun (k, _) -> k <> key) !popen_processes
   )
 
 let process_in_pid inchan =
