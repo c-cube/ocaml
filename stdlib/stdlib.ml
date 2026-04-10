@@ -482,12 +482,20 @@ let fresh_channel_id_ () =
     else loop ()
   in loop ()
 
+(* [hash_balloon] is a large immutable int array placed early in the record
+   so that Hashtbl.hash (and hash_param with large limits) exhausts its
+   budget before reaching [buf] which contains mutable off/len fields.
+   The array is shared across all channels to avoid allocation overhead. *)
+external make_array_ : int -> 'a -> 'a array = "caml_array_make"
+let hash_balloon : int array = make_array_ 256 0
+
 type out_channel = Out_ch : {
   id: int;
-  buf: chan_buffer;
+  hash_balloon: int array;
   ops: 'st out_ops;
   st: 'st;
   mutable closed: bool;
+  buf: chan_buffer;
 } -> out_channel
 
 (* ---- Input channel ---- *)
@@ -506,10 +514,11 @@ type 'st in_ops = {
 
 type in_channel = In_ch : {
   id: int;
-  buf: chan_buffer;
+  hash_balloon: int array;
   ops: 'st in_ops;
   st: 'st;
   mutable closed: bool;
+  buf: chan_buffer;
 } -> in_channel
 
 (* ---- Global tracking of fd-backed output channels for flush_all ---- *)
@@ -597,14 +606,16 @@ let make_fd_state fd flags binary name =
 
 let make_fd_out_channel fd flags binary name =
   let st = make_fd_state fd flags binary name in
-  let oc = Out_ch { id = fresh_channel_id_ (); buf = make_chan_buffer ();
-                    ops = fd_out_ops; st; closed = false } in
+  let oc = Out_ch { id = fresh_channel_id_ (); hash_balloon;
+                    ops = fd_out_ops; st; closed = false;
+                    buf = make_chan_buffer () } in
   register_out_channel oc;
   oc
 
 let make_fd_in_channel fd flags binary name =
-  In_ch { id = fresh_channel_id_ (); buf = make_chan_buffer (); ops = fd_in_ops;
-          st = make_fd_state fd flags binary name; closed = false }
+  In_ch { id = fresh_channel_id_ (); hash_balloon;
+          ops = fd_in_ops; st = make_fd_state fd flags binary name;
+          closed = false; buf = make_chan_buffer () }
 
 (* ---- Public constructors for fd-backed channels ---- *)
 
@@ -625,12 +636,6 @@ let out_channel_fd (oc : out_channel) : int =
   match r.ops.out_get_fd with
   | Some f -> f r.st
   | None -> invalid_arg "out_channel_fd: not a file-descriptor channel"
-
-let in_channel_id (ic : in_channel) : int =
-  let (In_ch r) = ic in r.id
-
-let out_channel_id (oc : out_channel) : int =
-  let (Out_ch r) = oc in r.id
 
 (* ---- Standard channels ---- *)
 

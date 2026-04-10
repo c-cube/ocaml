@@ -955,23 +955,14 @@ type popen_process =
   | Process_out of out_channel
   | Process_full of in_channel * out_channel * in_channel
 
-(* Key on stable channel id (unique int) rather than channel objects,
-   because Hashtbl.hash on channels traverses mutable buffer fields. *)
-let popen_key_of_process = function
-  | Process_in ic -> Stdlib.in_channel_id ic
-  | Process_out oc -> Stdlib.out_channel_id oc
-  | Process (ic, _) -> Stdlib.in_channel_id ic
-  | Process_full (ic, _, _) -> Stdlib.in_channel_id ic
-
-let popen_processes = (Hashtbl.create 7 : (int, int) Hashtbl.t)
+let popen_processes = (Hashtbl.create 7 : (popen_process, int) Hashtbl.t)
 let popen_mutex = Mutex.create ()
 
 let open_proc prog args envopt proc input output error =
   let pid =
     create_process_gen prog args envopt input output error in
-  let key = popen_key_of_process proc in
   Mutex.protect popen_mutex (fun () ->
-    Hashtbl.add popen_processes key pid)
+    Hashtbl.add popen_processes proc pid)
 
 let open_process_args_in prog args =
   let (in_read, in_write) = pipe ~cloexec:true () in
@@ -1060,18 +1051,16 @@ let open_process_full cmd =
   open_process_shell open_process_args_full cmd
 
 let find_proc_id fun_name proc =
-  let key = popen_key_of_process proc in
   try
     Mutex.protect popen_mutex (fun () ->
-      Hashtbl.find popen_processes key
+      Hashtbl.find popen_processes proc
     )
   with Not_found ->
     raise(Unix_error(EBADF, fun_name, ""))
 
 let remove_proc_id proc =
-  let key = popen_key_of_process proc in
   Mutex.protect popen_mutex (fun () ->
-    Hashtbl.remove popen_processes key
+    Hashtbl.remove popen_processes proc
   )
 
 let process_in_pid inchan =
