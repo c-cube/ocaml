@@ -392,21 +392,23 @@ let seek_set_ = 0
 let seek_cur_ = 1
 let seek_end_ = 2
 
-(* ---- Per-channel mutex (used before Mutex module is available) ---- *)
+(* ---- Internal concurrency primitives (before Mutex/Atomic are available) ---- *)
 
-type mutex_
-external mutex_new_ : unit -> mutex_ = "caml_ml_mutex_new"
-external mutex_lock_ : mutex_ -> unit = "caml_ml_mutex_lock"
-external mutex_unlock_ : mutex_ -> unit = "caml_ml_mutex_unlock"
+module Mutex_ = struct
+  type t
+  external create : unit -> t = "caml_ml_mutex_new"
+  external lock : t -> unit = "caml_ml_mutex_lock"
+  external unlock : t -> unit = "caml_ml_mutex_unlock"
+end
 
-(* IMPORTANT: always use [with_chan_lock] or lock/unlock in matched pairs.
-   The lock is a plain pthread mutex, not recursive. *)
+module Atomic_ = struct
+  type 'a t
+  external make : 'a -> 'a t = "%makemutable"
+  external get : 'a t -> 'a = "%atomic_load"
+  external compare_and_set : 'a t -> 'a -> 'a -> bool = "%atomic_cas"
+end
 
-let[@inline] with_chan_lock mtx f =
-  mutex_lock_ mtx;
-  match f () with
-  | x -> mutex_unlock_ mtx; x
-  | exception e -> mutex_unlock_ mtx; raise e
+external domain_self_id_ : unit -> int = "caml_ml_domain_id" [@@noalloc]
 
 (* ---- Channel buffer type ---- *)
 
@@ -414,12 +416,10 @@ type chan_buffer = {
   bs: bigstring;
   mutable off: int;  (* start of valid data *)
   mutable len: int;  (* number of valid bytes from off *)
-  mutex: mutex_;
 }
 
 let make_chan_buffer () =
-  { bs = create_bigstring io_buffer_size; off = 0; len = 0;
-    mutex = mutex_new_ () }
+  { bs = create_bigstring io_buffer_size; off = 0; len = 0 }
 
 (* ---- Fd state (for fd-backed channels) ---- *)
 
@@ -430,8 +430,23 @@ type fd_state = {
   mutable binary: bool;
   mutable buffered: bool;
   mutable name: string option;
+  mutex: Mutex_.t;
+  mutable lock_holder: int;  (* domain id holding the lock, or -1 *)
 }
 [@@@warning "+69"]
+
+(* Re-entrant lock for fd out_channels. If the current domain already holds
+   the lock (signal handler re-entering), skip the lock. *)
+let[@inline] with_fd_lock (st : fd_state) f =
+  let self = domain_self_id_ () in
+  if st.lock_holder = self then f ()
+  else begin
+    Mutex_.lock st.mutex;
+    st.lock_holder <- self;
+    match f () with
+    | x -> st.lock_holder <- -1; Mutex_.unlock st.mutex; x
+    | exception e -> st.lock_holder <- -1; Mutex_.unlock st.mutex; raise e
+  end
 
 (* ---- Output channel ---- *)
 
@@ -478,12 +493,16 @@ type in_channel = In_ch : {
   mutable closed: bool;
 } -> in_channel
 
-(* ---- Global tracking of output channels for flush_all ---- *)
+(* ---- Global tracking of fd-backed output channels for flush_all ---- *)
 
-let all_out_channels : out_channel list ref = ref []
+let all_out_channels : out_channel list Atomic_.t = Atomic_.make []
 
 let register_out_channel (oc : out_channel) =
-  all_out_channels := oc :: !all_out_channels
+  let rec loop () =
+    let old = Atomic_.get all_out_channels in
+    if not (Atomic_.compare_and_set all_out_channels old (oc :: old))
+    then loop ()
+  in loop ()
 
 let [@tail_mod_cons] rec filter_phys_neq v = function
   | [] -> []
@@ -492,27 +511,35 @@ let [@tail_mod_cons] rec filter_phys_neq v = function
     else x :: filter_phys_neq v rest
 
 let unregister_out_channel (oc : out_channel) =
-  all_out_channels := filter_phys_neq oc !all_out_channels
+  let rec loop () =
+    let old = Atomic_.get all_out_channels in
+    let new_ = filter_phys_neq oc old in
+    if not (Atomic_.compare_and_set all_out_channels old new_)
+    then loop ()
+  in loop ()
 
 (* ---- Fd-backed vtables ---- *)
 
 let fd_out_ops : fd_state out_ops = {
   out_write = (fun st bs ofs len ->
-    raw_write st.fd st.flags bs ofs len);
+    with_fd_lock st (fun () -> raw_write st.fd st.flags bs ofs len));
   out_flush = (fun _st -> ());
-  out_close = (fun st -> close_desc st.fd);
+  out_close = (fun st ->
+    with_fd_lock st (fun () -> close_desc st.fd));
   out_seek = Some (fun st pos ->
-    ignore (raw_lseek st.fd pos seek_set_));
+    with_fd_lock st (fun () -> ignore (raw_lseek st.fd pos seek_set_)));
   out_pos = Some (fun st ->
-    raw_lseek st.fd 0L seek_cur_);
+    with_fd_lock st (fun () -> raw_lseek st.fd 0L seek_cur_));
   out_length = Some (fun st ->
-    let cur = raw_lseek st.fd 0L seek_cur_ in
-    let sz = raw_lseek st.fd 0L seek_end_ in
-    ignore (raw_lseek st.fd cur seek_set_);
-    sz);
+    with_fd_lock st (fun () ->
+      let cur = raw_lseek st.fd 0L seek_cur_ in
+      let sz = raw_lseek st.fd 0L seek_end_ in
+      ignore (raw_lseek st.fd cur seek_set_);
+      sz));
   out_set_binary = Some (fun st bin ->
-    raw_set_binary_mode st.fd bin;
-    st.binary <- bin);
+    with_fd_lock st (fun () ->
+      raw_set_binary_mode st.fd bin;
+      st.binary <- bin));
   out_isatty = Some (fun st -> raw_isatty st.fd);
   out_is_binary = Some (fun st -> st.binary);
   out_get_fd = Some (fun st -> st.fd);
@@ -545,8 +572,12 @@ let fd_in_ops : fd_state in_ops = {
 
 (* ---- Channel constructors ---- *)
 
+let make_fd_state fd flags binary name =
+  { fd; flags; binary; buffered = true; name;
+    mutex = Mutex_.create (); lock_holder = -1 }
+
 let make_fd_out_channel fd flags binary name =
-  let st = { fd; flags; binary; buffered = true; name } in
+  let st = make_fd_state fd flags binary name in
   let oc = Out_ch { buf = make_chan_buffer (); ops = fd_out_ops;
                     st; closed = false } in
   register_out_channel oc;
@@ -554,7 +585,7 @@ let make_fd_out_channel fd flags binary name =
 
 let make_fd_in_channel fd flags binary name =
   In_ch { buf = make_chan_buffer (); ops = fd_in_ops;
-          st = { fd; flags; binary; buffered = true; name }; closed = false }
+          st = make_fd_state fd flags binary name; closed = false }
 
 (* ---- Public constructors for fd-backed channels ---- *)
 
@@ -584,22 +615,27 @@ let stderr = make_fd_out_channel 2 0 false None
 
 (* ==== Output functions ==== *)
 
-(* Internal: flush buffer contents via out_write, handling partial writes *)
+(* Internal: flush buffer contents via out_write, handling partial writes.
+   If the channel is closed (e.g. by a signal handler) during a write,
+   discard remaining buffer data and return. *)
 let flush_buf (Out_ch r) =
-  while r.buf.len > 0 do
-    let n = r.ops.out_write r.st r.buf.bs r.buf.off r.buf.len in
-    r.buf.off <- r.buf.off + n;
-    r.buf.len <- r.buf.len - n
+  while r.buf.len > 0 && not r.closed do
+    match r.ops.out_write r.st r.buf.bs r.buf.off r.buf.len with
+    | n ->
+      r.buf.off <- r.buf.off + n;
+      r.buf.len <- r.buf.len - n
+    | exception Sys_error _ when r.closed ->
+      (* Signal handler closed the channel; discard remaining data *)
+      r.buf.len <- 0
   done;
   r.buf.off <- 0
 
 let flush (oc : out_channel) =
   let (Out_ch r) = oc in
-  with_chan_lock r.buf.mutex (fun () ->
-    if not r.closed then begin
-      flush_buf oc;
-      r.ops.out_flush r.st
-    end)
+  if not r.closed then begin
+    flush_buf oc;
+    r.ops.out_flush r.st
+  end
 
 let flush_all () =
   let rec iter = function
@@ -612,17 +648,17 @@ let flush_all () =
       end;
       iter l
   in
-  iter !all_out_channels
+  iter (Atomic_.get all_out_channels)
 
 let output_char (oc : out_channel) (c : char) =
   let (Out_ch r) = oc in
-  with_chan_lock r.buf.mutex (fun () ->
-    if r.closed then raise (Sys_error "output_char: channel is closed");
-    let cap = ba_dim r.buf.bs in
-    if r.buf.off + r.buf.len >= cap then flush_buf oc;
-    ba_unsafe_set r.buf.bs (r.buf.off + r.buf.len) c;
-    r.buf.len <- r.buf.len + 1;
-    if not (r.ops.out_is_buffered r.st) then flush_buf oc)
+  if r.closed then raise (Sys_error "output_char: channel is closed");
+  let cap = ba_dim r.buf.bs in
+  if r.buf.off + r.buf.len >= cap then flush_buf oc;
+  ba_unsafe_set r.buf.bs (r.buf.off + r.buf.len) c;
+  r.buf.len <- r.buf.len + 1;
+  if r.buf.off + r.buf.len >= cap || not (r.ops.out_is_buffered r.st)
+  then flush_buf oc
 
 let output_byte (oc : out_channel) (n : int) =
   output_char oc (unsafe_char_of_int (n land 0xFF))
@@ -631,20 +667,20 @@ let output (oc : out_channel) (s : bytes) (ofs : int) (len : int) =
   if ofs < 0 || len < 0 || ofs > bytes_length s - len
   then invalid_arg "output";
   let (Out_ch r) = oc in
-  with_chan_lock r.buf.mutex (fun () ->
-    if r.closed then raise (Sys_error "output: channel is closed");
-    let cap = ba_dim r.buf.bs in
-    let i = ref ofs in
-    let remaining = ref len in
-    while !remaining > 0 do
-      if r.buf.off + r.buf.len >= cap then flush_buf oc;
-      let n = min !remaining (cap - r.buf.off - r.buf.len) in
-      blit_bytes_to_bigstring s !i r.buf.bs (r.buf.off + r.buf.len) n;
-      r.buf.len <- r.buf.len + n;
-      i := !i + n;
-      remaining := !remaining - n
-    done;
-    if not (r.ops.out_is_buffered r.st) then flush_buf oc)
+  if r.closed then raise (Sys_error "output: channel is closed");
+  let cap = ba_dim r.buf.bs in
+  let i = ref ofs in
+  let remaining = ref len in
+  while !remaining > 0 do
+    if r.buf.off + r.buf.len >= cap then flush_buf oc;
+    let n = min !remaining (cap - r.buf.off - r.buf.len) in
+    blit_bytes_to_bigstring s !i r.buf.bs (r.buf.off + r.buf.len) n;
+    r.buf.len <- r.buf.len + n;
+    i := !i + n;
+    remaining := !remaining - n
+  done;
+  if r.buf.off + r.buf.len >= cap || not (r.ops.out_is_buffered r.st)
+  then flush_buf oc
 
 let output_substring (oc : out_channel) (s : string) (ofs : int) (len : int) =
   if ofs < 0 || len < 0 || ofs > string_length s - len
@@ -666,23 +702,20 @@ let output_value oc v =
 
 let seek_out (oc : out_channel) (pos : int) =
   let (Out_ch r) = oc in
-  with_chan_lock r.buf.mutex (fun () ->
-    if r.closed then raise (Sys_error "seek_out: channel is closed");
-    flush_buf oc;
-    r.ops.out_flush r.st;
-    match r.ops.out_seek with
-    | None -> invalid_arg "seek_out: channel does not support seeking"
-    | Some f -> f r.st (int64_of_int pos))
+  if r.closed then raise (Sys_error "seek_out: channel is closed");
+  flush oc;
+  match r.ops.out_seek with
+  | None -> invalid_arg "seek_out: channel does not support seeking"
+  | Some f -> f r.st (int64_of_int pos)
 
 let pos_out (oc : out_channel) =
   let (Out_ch r) = oc in
-  with_chan_lock r.buf.mutex (fun () ->
-    if r.closed then raise (Sys_error "pos_out: channel is closed");
-    match r.ops.out_pos with
-    | None -> invalid_arg "pos_out: channel does not support position"
-    | Some f ->
-      let raw = f r.st in
-      int64_to_int (int64_add raw (int64_of_int r.buf.len)))
+  if r.closed then raise (Sys_error "pos_out: channel is closed");
+  match r.ops.out_pos with
+  | None -> invalid_arg "pos_out: channel does not support position"
+  | Some f ->
+    let raw = f r.st in
+    int64_to_int (int64_add raw (int64_of_int r.buf.len))
 
 let out_channel_length (oc : out_channel) =
   let (Out_ch r) = oc in
@@ -694,13 +727,12 @@ let out_channel_length (oc : out_channel) =
 
 let close_out_channel (oc : out_channel) =
   let (Out_ch r) = oc in
-  with_chan_lock r.buf.mutex (fun () ->
-    if not r.closed then begin
-      r.closed <- true;
-      unregister_out_channel oc;
-      (try flush_buf oc with _ -> ());
-      r.ops.out_close r.st
-    end)
+  if not r.closed then begin
+    r.closed <- true;
+    unregister_out_channel oc;
+    (try flush_buf oc with _ -> ());
+    r.ops.out_close r.st
+  end
 
 let close_out oc = flush oc; close_out_channel oc
 
@@ -710,12 +742,11 @@ let close_out_noerr oc =
 
 let set_binary_mode_out (oc : out_channel) (bin : bool) =
   let (Out_ch r) = oc in
-  with_chan_lock r.buf.mutex (fun () ->
-    if r.closed then raise (Sys_error "set_binary_mode_out: channel is closed");
-    flush_buf oc;
-    match r.ops.out_set_binary with
-    | None -> ()
-    | Some f -> f r.st bin)
+  if r.closed then raise (Sys_error "set_binary_mode_out: channel is closed");
+  flush_buf oc;
+  match r.ops.out_set_binary with
+  | None -> ()
+  | Some f -> f r.st bin
 
 let out_channel_isatty (oc : out_channel) =
   let (Out_ch r) = oc in
@@ -731,10 +762,9 @@ let out_channel_is_binary_mode (oc : out_channel) =
 
 let set_buffered_out (oc : out_channel) (b : bool) =
   let (Out_ch r) = oc in
-  with_chan_lock r.buf.mutex (fun () ->
-    if r.closed then raise (Sys_error "set_buffered: channel is closed");
-    if not b then flush_buf oc;
-    r.ops.out_set_buffered r.st b)
+  if r.closed then raise (Sys_error "set_buffered: channel is closed");
+  if not b then flush_buf oc;
+  r.ops.out_set_buffered r.st b
 
 let is_buffered_out (oc : out_channel) : bool =
   let (Out_ch r) = oc in
@@ -758,16 +788,15 @@ let open_out_bin name =
 
 let input_char (ic : in_channel) =
   let (In_ch r) = ic in
-  with_chan_lock r.buf.mutex (fun () ->
-    if r.closed then raise (Sys_error "input_char: channel is closed");
-    if r.buf.len = 0 then begin
-      r.ops.in_read r.st r.buf;
-      if r.buf.len = 0 then raise End_of_file
-    end;
-    let c = ba_unsafe_get r.buf.bs r.buf.off in
-    r.buf.off <- r.buf.off + 1;
-    r.buf.len <- r.buf.len - 1;
-    c)
+  if r.closed then raise (Sys_error "input_char: channel is closed");
+  if r.buf.len = 0 then begin
+    r.ops.in_read r.st r.buf;
+    if r.buf.len = 0 then raise End_of_file
+  end;
+  let c = ba_unsafe_get r.buf.bs r.buf.off in
+  r.buf.off <- r.buf.off + 1;
+  r.buf.len <- r.buf.len - 1;
+  c
 
 let input_byte (ic : in_channel) =
   int_of_char (input_char ic)
@@ -775,25 +804,24 @@ let input_byte (ic : in_channel) =
 (* Internal: read into user's bytes buffer without bounds checking *)
 let unsafe_input (ic : in_channel) (s : bytes) (ofs : int) (len : int) =
   let (In_ch r) = ic in
-  with_chan_lock r.buf.mutex (fun () ->
-    if r.closed then raise (Sys_error "input: channel is closed");
-    if r.buf.len = 0 then begin
-      r.ops.in_read r.st r.buf;
-      if r.buf.len = 0 then 0
-      else begin
-        let n = min r.buf.len len in
-        blit_bigstring_to_bytes r.buf.bs r.buf.off s ofs n;
-        r.buf.off <- r.buf.off + n;
-        r.buf.len <- r.buf.len - n;
-        n
-      end
-    end else begin
+  if r.closed then raise (Sys_error "input: channel is closed");
+  if r.buf.len = 0 then begin
+    r.ops.in_read r.st r.buf;
+    if r.buf.len = 0 then 0
+    else begin
       let n = min r.buf.len len in
       blit_bigstring_to_bytes r.buf.bs r.buf.off s ofs n;
       r.buf.off <- r.buf.off + n;
       r.buf.len <- r.buf.len - n;
       n
-    end)
+    end
+  end else begin
+    let n = min r.buf.len len in
+    blit_bigstring_to_bytes r.buf.bs r.buf.off s ofs n;
+    r.buf.off <- r.buf.off + n;
+    r.buf.len <- r.buf.len - n;
+    n
+  end
 
 let input ic s ofs len =
   if ofs < 0 || len < 0 || ofs > bytes_length s - len
@@ -862,41 +890,40 @@ let concat_chunks_rev (chunks : bytes list) (total : int) : string =
 
 let input_line (ic : in_channel) =
   let (In_ch r) = ic in
-  with_chan_lock r.buf.mutex (fun () ->
-    if r.closed then raise (Sys_error "input_line: channel is closed");
-    (* Fast path: newline already in buffer *)
-    let nl = scan_newline r.buf in
-    if nl >= 0 then begin
-      let line = consume_buf r.buf nl in
-      r.buf.off <- r.buf.off + 1; (* skip '\n' *)
-      r.buf.len <- r.buf.len - 1;
-      bytes_unsafe_to_string line
-    end else begin
-      (* Slow path: accumulate chunks across refills *)
-      let rec collect chunks total_len =
+  if r.closed then raise (Sys_error "input_line: channel is closed");
+  (* Fast path: newline already in buffer *)
+  let nl = scan_newline r.buf in
+  if nl >= 0 then begin
+    let line = consume_buf r.buf nl in
+    r.buf.off <- r.buf.off + 1; (* skip '\n' *)
+    r.buf.len <- r.buf.len - 1;
+    bytes_unsafe_to_string line
+  end else begin
+    (* Slow path: accumulate chunks across refills *)
+    let rec collect chunks total_len =
+      if r.buf.len = 0 then begin
+        r.ops.in_read r.st r.buf;
         if r.buf.len = 0 then begin
-          r.ops.in_read r.st r.buf;
-          if r.buf.len = 0 then begin
-            (* EOF *)
-            if total_len = 0 then raise End_of_file
-            else concat_chunks_rev chunks total_len
-          end else
-            collect chunks total_len
+          (* EOF *)
+          if total_len = 0 then raise End_of_file
+          else concat_chunks_rev chunks total_len
         end else
-          let nl = scan_newline r.buf in
-          if nl >= 0 then begin
-            let chunk = consume_buf r.buf nl in
-            r.buf.off <- r.buf.off + 1;
-            r.buf.len <- r.buf.len - 1;
-            concat_chunks_rev (chunk :: chunks) (total_len + nl)
-          end else begin
-            let chunk = consume_buf r.buf r.buf.len in
-            r.ops.in_read r.st r.buf;
-            collect (chunk :: chunks) (total_len + bytes_length chunk)
-          end
-      in
-      collect [] 0
-    end)
+          collect chunks total_len
+      end else
+        let nl = scan_newline r.buf in
+        if nl >= 0 then begin
+          let chunk = consume_buf r.buf nl in
+          r.buf.off <- r.buf.off + 1;
+          r.buf.len <- r.buf.len - 1;
+          concat_chunks_rev (chunk :: chunks) (total_len + nl)
+        end else begin
+          let chunk = consume_buf r.buf r.buf.len in
+          r.ops.in_read r.st r.buf;
+          collect (chunk :: chunks) (total_len + bytes_length chunk)
+        end
+    in
+    collect [] 0
+  end
 
 let input_binary_int ic =
   let b0 = input_byte ic in
@@ -921,54 +948,49 @@ let input_value ic =
 
 let seek_in (ic : in_channel) (pos : int) =
   let (In_ch r) = ic in
-  with_chan_lock r.buf.mutex (fun () ->
-    if r.closed then raise (Sys_error "seek_in: channel is closed");
-    (* Discard buffered data *)
-    r.buf.off <- 0;
-    r.buf.len <- 0;
-    match r.ops.in_seek with
-    | None -> invalid_arg "seek_in: channel does not support seeking"
-    | Some f -> f r.st (int64_of_int pos))
+  if r.closed then raise (Sys_error "seek_in: channel is closed");
+  (* Discard buffered data *)
+  r.buf.off <- 0;
+  r.buf.len <- 0;
+  match r.ops.in_seek with
+  | None -> invalid_arg "seek_in: channel does not support seeking"
+  | Some f -> f r.st (int64_of_int pos)
 
 let pos_in (ic : in_channel) =
   let (In_ch r) = ic in
-  with_chan_lock r.buf.mutex (fun () ->
-    if r.closed then raise (Sys_error "pos_in: channel is closed");
-    match r.ops.in_pos with
-    | None -> invalid_arg "pos_in: channel does not support position"
-    | Some f ->
-      (* Kernel position minus buffered unread data *)
-      let raw = f r.st in
-      int64_to_int (int64_sub raw (int64_of_int r.buf.len)))
+  if r.closed then raise (Sys_error "pos_in: channel is closed");
+  match r.ops.in_pos with
+  | None -> invalid_arg "pos_in: channel does not support position"
+  | Some f ->
+    (* Kernel position minus buffered unread data *)
+    let raw = f r.st in
+    int64_to_int (int64_sub raw (int64_of_int r.buf.len))
 
 let in_channel_length (ic : in_channel) =
   let (In_ch r) = ic in
-  with_chan_lock r.buf.mutex (fun () ->
-    if r.closed then raise (Sys_error "in_channel_length: channel is closed");
-    match r.ops.in_length with
-    | None ->
-      invalid_arg "in_channel_length: channel does not support length"
-    | Some f -> int64_to_int (f r.st))
+  if r.closed then raise (Sys_error "in_channel_length: channel is closed");
+  match r.ops.in_length with
+  | None ->
+    invalid_arg "in_channel_length: channel does not support length"
+  | Some f -> int64_to_int (f r.st)
 
 let close_in (ic : in_channel) =
   let (In_ch r) = ic in
-  with_chan_lock r.buf.mutex (fun () ->
-    if not r.closed then begin
-      r.closed <- true;
-      r.buf.off <- 0;
-      r.buf.len <- 0;
-      r.ops.in_close r.st
-    end)
+  if not r.closed then begin
+    r.closed <- true;
+    r.buf.off <- 0;
+    r.buf.len <- 0;
+    r.ops.in_close r.st
+  end
 
 let close_in_noerr ic = (try close_in ic with _ -> ())
 
 let set_binary_mode_in (ic : in_channel) (bin : bool) =
   let (In_ch r) = ic in
-  with_chan_lock r.buf.mutex (fun () ->
-    if r.closed then raise (Sys_error "set_binary_mode_in: channel is closed");
-    match r.ops.in_set_binary with
-    | None -> ()
-    | Some f -> f r.st bin)
+  if r.closed then raise (Sys_error "set_binary_mode_in: channel is closed");
+  match r.ops.in_set_binary with
+  | None -> ()
+  | Some f -> f r.st bin
 
 let in_channel_isatty (ic : in_channel) =
   let (In_ch r) = ic in
@@ -1031,8 +1053,7 @@ module LargeFile = struct
   let seek_out (oc : out_channel) (pos : int64) =
     let (Out_ch r) = oc in
     if r.closed then raise (Sys_error "seek_out: channel is closed");
-    flush_buf oc;
-    r.ops.out_flush r.st;
+    flush oc;
     match r.ops.out_seek with
     | None -> invalid_arg "seek_out: channel does not support seeking"
     | Some f -> f r.st pos
