@@ -822,12 +822,6 @@ val out_channel_fd : out_channel -> int
 (** Return the file descriptor underlying an output channel.
     @raise Invalid_argument if the channel is not backed by a file descriptor. *)
 
-val in_channel_id : in_channel -> int
-(** Return a unique integer identifier for this input channel. *)
-
-val out_channel_id : out_channel -> int
-(** Return a unique integer identifier for this output channel. *)
-
 val stdin : in_channel
 (** The standard input for the process. *)
 
