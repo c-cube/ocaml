@@ -175,10 +175,6 @@ module MD5 = struct
     then invalid_arg "Digest.subbytes"
     else unsafe_bytes b ofs len
 
-  (* [channel ic toread] reads [toread] bytes (or all remaining if [toread < 0])
-     from [ic] and returns their MD5 hash.  We use [In_channel.input] rather
-     than the old [caml_md5_chan] C primitive which assumed the old C-struct
-     channel representation. *)
   let channel ic toread =
     let s =
       if toread < 0 then In_channel.input_all ic

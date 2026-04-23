@@ -41,11 +41,12 @@ CAMLprim value caml_md5_bytes(value b, value ofs, value len)
   return caml_md5_string(b, ofs, len);
 }
 
-/* Backward-compat stub: new stdlib uses caml_md5_bytes instead. */
+/* caml_md5_chan: the OCaml binding was removed; this stub keeps the primitive
+   table intact and reports an error if somehow reached. */
 CAMLprim value caml_md5_chan(value vchan, value len)
 {
   (void)vchan; (void)len;
-  caml_fatal_error("caml_md5_chan called after IO rewrite");
+  caml_fatal_error("caml_md5_chan is no longer supported");
 }
 
 CAMLexport void caml_md5_block(unsigned char digest[16],

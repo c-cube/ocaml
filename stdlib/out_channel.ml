@@ -60,24 +60,10 @@ let output_bytes = Stdlib.output_bytes
 let output = Stdlib.output
 let output_substring = Stdlib.output_substring
 
-(* Write [len] bytes from bigarray [buf] starting at [ofs] to [oc].
-   Uses an intermediate bytes buffer and Bigarray.Array1.unsafe_get to copy
-   data from the bigarray to the channel. *)
-let unsafe_output_bigarray oc buf ofs len =
-  (* Treat the bigarray as an int8_unsigned bigarray for the copy.
-     This is sound because the mli guarantees int8_unsigned_elt. *)
-  let ibuf : (int, Bigarray.int8_unsigned_elt, Bigarray.c_layout)
-      Bigarray.Array1.t = Obj.magic buf in
-  let tmp = Bytes.create len in
-  for i = 0 to len - 1 do
-    Bytes.unsafe_set tmp i (Char.chr (Bigarray.Array1.unsafe_get ibuf (ofs + i)))
-  done;
-  Stdlib.output oc tmp 0 len
-
 let output_bigarray oc buf ofs len =
   if ofs < 0 || len < 0 || ofs > Bigarray.Array1.dim buf - len
   then invalid_arg "output_bigarray"
-  else unsafe_output_bigarray oc buf ofs len
+  else Stdlib.CamlinternalChannel.unsafe_output_bigarray oc buf ofs len
 
 let set_binary_mode = Stdlib.set_binary_mode_out
 

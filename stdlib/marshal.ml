@@ -33,9 +33,6 @@ let to_buffer buff ofs len v flags =
   then invalid_arg "Marshal.to_buffer: substring out of bounds"
   else to_buffer_unsafe buff ofs len v flags
 
-(* [to_channel] serializes [v] to bytes and writes them to [oc].
-   We use [to_bytes] + [output] rather than the old [caml_output_value]
-   C primitive, which assumes the old C-struct channel representation. *)
 let to_channel (oc : out_channel) v flags =
   let b = to_bytes v flags in
   output oc b 0 (Bytes.length b)
@@ -71,9 +68,6 @@ let from_string buff ofs =
      sequence is never mutated *)
   from_bytes (Bytes.unsafe_of_string buff) ofs
 
-(* [from_channel] reads a marshalled value from [ic].
-   We use [really_input] + [from_bytes] rather than [caml_input_value],
-   which assumes the old C-struct channel representation. *)
 let from_channel (ic : in_channel) =
   let header = Bytes.create header_size in
   really_input ic header 0 header_size;
