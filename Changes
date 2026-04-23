@@ -47,8 +47,7 @@ Working version
 - #14482: Add DWARF CFI support to POWER backend.
   (Tim McGilchrist, review by Xavier Leroy)
 
-- #todo: Enforce that `t == u` implies `t = u` for non-float values, even
-  recursively inside other values (meaning `t == u` implies, say, `[t;t] = [u]@[u]`).
+- TODO: Make IO channels extensible
   (Simon Cruanes)
 
 ### Type system:

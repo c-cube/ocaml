@@ -808,26 +808,21 @@ type in_channel
 type out_channel
 (** The type of output channel. *)
 
-val open_descriptor_in : int -> in_channel
-(** Create an input channel from a raw file descriptor. *)
-
-val open_descriptor_out : int -> out_channel
-(** Create an output channel from a raw file descriptor. *)
-
-val in_channel_fd : in_channel -> int
-(** Return the file descriptor underlying an input channel.
-    @raise Invalid_argument if the channel is not backed by a file descriptor. *)
-
-val out_channel_fd : out_channel -> int
-(** Return the file descriptor underlying an output channel.
-    @raise Invalid_argument if the channel is not backed by a file descriptor. *)
+module CamlinternalChannel : sig
+  (* Internal channel utilities. Not part of the stable public API. *)
+  val open_descriptor_in : int -> in_channel
+  val open_descriptor_out : int -> out_channel
+  val in_channel_fd : in_channel -> int
+  val out_channel_fd : out_channel -> int
+  val out_channel_terminfo_rows : out_channel -> int
+end
 
 (** {2 Extensible channels} *)
 
 type chan_buffer = {
-  buf: bytes;
-  mutable off: int;
-  mutable len: int;
+  buf: bytes;   (** The underlying byte storage. *)
+  mutable off: int;  (** Start of valid data within [buf]. *)
+  mutable len: int;  (** Number of valid bytes from [off]. *)
 }
 (** Buffer used by user-defined input channels. *)
 
@@ -1244,11 +1239,6 @@ val set_buffered_out : out_channel -> bool -> unit
 
 val is_buffered_out : out_channel -> bool
 (** [is_buffered_out oc] returns whether [oc] is in buffered mode. *)
-
-val out_channel_terminfo_rows : out_channel -> int
-(** [out_channel_terminfo_rows oc] returns the number of rows of the terminal
-    connected to [oc], or [-1] if [oc] is not a terminal or the information
-    is unavailable. *)
 
 
 (** {2 Operations on large files} *)

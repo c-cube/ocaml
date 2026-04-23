@@ -1214,7 +1214,6 @@ runtime_COMMON_C_SOURCES = \
   bigarray \
   blake2 \
   callback \
-  channel_stubs \
   codefrag \
   compare \
   custom \

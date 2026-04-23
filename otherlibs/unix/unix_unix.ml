@@ -306,15 +306,14 @@ let single_write_substring fd buf ofs len =
 
 (* Interfacing with the standard input/output library *)
 
-(* descr_of_in/out_channel are placed here because they are simple;
-   in_channel_of_descr and out_channel_of_descr are defined later, after
-   getsockopt, because they need to check stream semantics. *)
-
-let descr_of_in_channel (ic : in_channel) : file_descr =
-  Stdlib.in_channel_fd ic
-
-let descr_of_out_channel (oc : out_channel) : file_descr =
-  Stdlib.out_channel_fd oc
+external in_channel_of_descr : file_descr -> in_channel
+                             = "caml_unix_inchannel_of_filedescr"
+external out_channel_of_descr : file_descr -> out_channel
+                              = "caml_unix_outchannel_of_filedescr"
+external descr_of_in_channel : in_channel -> file_descr
+                             = "caml_channel_descriptor"
+external descr_of_out_channel : out_channel -> file_descr
+                              = "caml_channel_descriptor"
 
 (* Seeking and truncating *)
 
@@ -724,21 +723,6 @@ let getsockopt_float fd opt = SO.get SO.float fd opt
 let setsockopt_float fd opt v = SO.set SO.float fd opt v
 
 let getsockopt_error fd = SO.get SO.error fd SO_ERROR
-
-(* Check that a file descriptor has "stream semantics" and can therefore
-   be used as part of buffered I/O.  Things that don't have "stream
-   semantics" include block devices and UDP (datagram) sockets.
-   Raises Unix_error on failure, returns unit on success. *)
-external check_stream_semantics : file_descr -> string -> unit
-  = "caml_unix_check_stream_semantics"
-
-let in_channel_of_descr (fd : file_descr) : in_channel =
-  check_stream_semantics fd "in_channel_of_descr";
-  Stdlib.open_descriptor_in (fd :> int)
-
-let out_channel_of_descr (fd : file_descr) : out_channel =
-  check_stream_semantics fd "out_channel_of_descr";
-  Stdlib.open_descriptor_out (fd :> int)
 
 (* Host and protocol databases *)
 

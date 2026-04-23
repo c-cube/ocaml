@@ -1,6 +1,4 @@
-(* DISABLED TEST - this test relied on caml_ml_out_channels_list, a C primitive
-   that no longer exists after the pure-OCaml channel rewrite. Channel lifetime
-   is now managed by the OCaml GC; refcounting is no longer needed.
+(* TEST
  expect;
 *)
 

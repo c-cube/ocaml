@@ -16,7 +16,7 @@
 open Printf
 
 let isatty oc = out_channel_isatty oc
-let terminfo_rows oc = Stdlib.out_channel_terminfo_rows oc
+let terminfo_rows oc = Stdlib.CamlinternalChannel.out_channel_terminfo_rows oc
 
 type status =
   | Uninitialised
