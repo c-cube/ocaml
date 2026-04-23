@@ -68,24 +68,9 @@ let input_line ic =
 
 let input = Stdlib.input
 
-(* Read up to [len] bytes from [ic] into bigarray [buf] starting at [ofs].
-   Uses an intermediate bytes buffer and Bytes.blit_to_bigarray to copy
-   from the channel into the target bigarray.
-   The [buf] is treated as a byte buffer regardless of its element kind,
-   which is safe because all supported element types have the same memory
-   representation. *)
-let unsafe_input_bigarray ic buf ofs len =
-  (* Treat the bigarray as an int8_unsigned bigarray for the copy.
-     This is sound because the mli guarantees int8_unsigned_elt. *)
-  let ibuf : (int, Bigarray.int8_unsigned_elt, Bigarray.c_layout)
-      Bigarray.Array1.t = Obj.magic buf in
-  let tmp = Bytes.create len in
-  let n = Stdlib.input ic tmp 0 len in
-  for i = 0 to n - 1 do
-    Bigarray.Array1.unsafe_set ibuf (ofs + i)
-      (Char.code (Bytes.unsafe_get tmp i))
-  done;
-  n
+external unsafe_input_bigarray :
+  t -> _ Bigarray.Array1.t -> int -> int -> int
+  = "caml_ml_input_bigarray"
 
 let input_bigarray ic buf ofs len =
   if ofs < 0 || len < 0 || ofs > Bigarray.Array1.dim buf - len
@@ -219,6 +204,6 @@ let rec fold_lines f accu ic =
 
 let set_binary_mode = Stdlib.set_binary_mode_in
 
-let is_binary_mode = Stdlib.in_channel_is_binary_mode
+external is_binary_mode : in_channel -> bool = "caml_ml_is_binary_mode"
 
-let isatty = Stdlib.in_channel_isatty
+external isatty : t -> bool = "caml_sys_isatty"
