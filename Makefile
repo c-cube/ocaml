@@ -1232,7 +1232,7 @@ runtime_COMMON_C_SOURCES = \
   hash \
   intern \
   ints \
-  c_io \
+  io \
   lexing \
   lf_skiplist \
   main \

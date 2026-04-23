@@ -822,6 +822,50 @@ val out_channel_fd : out_channel -> int
 (** Return the file descriptor underlying an output channel.
     @raise Invalid_argument if the channel is not backed by a file descriptor. *)
 
+(** {2 Extensible channels} *)
+
+type chan_buffer = {
+  buf: bytes;
+  mutable off: int;
+  mutable len: int;
+}
+(** Buffer used by user-defined input channels. *)
+
+type 'st out_ops = {
+  out_write: 'st -> bytes -> int -> int -> int;
+  out_flush: 'st -> unit;
+  out_close: 'st -> unit;
+  out_seek: ('st -> int64 -> unit) option;
+  out_pos: ('st -> int64) option;
+  out_length: ('st -> int64) option;
+  out_set_binary: ('st -> bool -> unit) option;
+  out_isatty: ('st -> bool) option;
+  out_is_binary: ('st -> bool) option;
+  out_get_fd: ('st -> int) option;
+  out_set_buffered: 'st -> bool -> unit;
+  out_is_buffered: 'st -> bool;
+}
+(** Operations for a user-defined output channel. *)
+
+type 'st in_ops = {
+  in_read: 'st -> chan_buffer -> unit;
+  in_close: 'st -> unit;
+  in_seek: ('st -> int64 -> unit) option;
+  in_pos: ('st -> int64) option;
+  in_length: ('st -> int64) option;
+  in_set_binary: ('st -> bool -> unit) option;
+  in_isatty: ('st -> bool) option;
+  in_is_binary: ('st -> bool) option;
+  in_get_fd: ('st -> int) option;
+}
+(** Operations for a user-defined input channel. *)
+
+val make_in_channel : 'st -> 'st in_ops -> in_channel
+(** [make_in_channel state ops] creates a user-defined input channel. *)
+
+val make_out_channel : 'st -> 'st out_ops -> out_channel
+(** [make_out_channel state ops] creates a user-defined output channel. *)
+
 val stdin : in_channel
 (** The standard input for the process. *)
 
@@ -1200,6 +1244,11 @@ val set_buffered_out : out_channel -> bool -> unit
 
 val is_buffered_out : out_channel -> bool
 (** [is_buffered_out oc] returns whether [oc] is in buffered mode. *)
+
+val out_channel_terminfo_rows : out_channel -> int
+(** [out_channel_terminfo_rows oc] returns the number of rows of the terminal
+    connected to [oc], or [-1] if [oc] is not a terminal or the information
+    is unavailable. *)
 
 
 (** {2 Operations on large files} *)

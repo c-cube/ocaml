@@ -15,13 +15,8 @@
 
 open Printf
 
-external terminfo_rows_fd: int -> int = "caml_stdlib_terminfo_rows"
-(* Extract the raw fd from a new-style out_channel (returns -1 if not fd-backed). *)
-external channel_fd_internal: out_channel -> int = "caml_stdlib_channel_fd"
 let isatty oc = out_channel_isatty oc
-let terminfo_rows oc =
-  let fd = channel_fd_internal oc in
-  if fd < 0 then -1 else terminfo_rows_fd fd
+let terminfo_rows oc = Stdlib.out_channel_terminfo_rows oc
 
 type status =
   | Uninitialised
