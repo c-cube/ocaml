@@ -815,10 +815,9 @@ module CamlinternalChannel : sig
   val in_channel_fd : in_channel -> int
   val out_channel_fd : out_channel -> int
   val out_channel_terminfo_rows : out_channel -> int
-  val unsafe_output_bigarray :
-    out_channel ->
-    (int, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t ->
-    int -> int -> unit
+  type native_out_channel
+  val native_out_channel_of : out_channel -> native_out_channel option
+  val unsafe_output_bigarray_native : native_out_channel -> 'a -> int -> int -> unit
 end
 
 (** {2 Extensible channels} *)

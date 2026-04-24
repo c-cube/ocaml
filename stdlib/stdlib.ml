@@ -347,7 +347,7 @@ external native_out_channels_list   : unit -> native_out_channel list
   = "caml_ml_out_channels_list"
 external native_unsafe_output       : native_out_channel -> bytes -> int -> int -> unit
   = "caml_ml_output_bytes"
-external native_unsafe_output_bigarray : native_out_channel -> _ Bigarray.Array1.t -> int -> int -> unit
+external native_unsafe_output_bigarray : native_out_channel -> 'a -> int -> int -> unit
   = "caml_ml_output_bigarray"
 external native_output_char         : native_out_channel -> char -> unit
   = "caml_ml_output_char"
@@ -509,25 +509,15 @@ module CamlinternalChannel = struct
     | OC_native nc -> native_terminfo_rows nc
     | OC_user_defined _ -> -1
 
-  let unsafe_output_bigarray (oc : out_channel)
-      (buf : (int, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t)
-      ofs len =
+  type nonrec native_out_channel = native_out_channel
+
+  let unsafe_output_bigarray_native nc buf ofs len =
+    native_unsafe_output_bigarray nc buf ofs len
+
+  let native_out_channel_of (oc : out_channel) =
     match oc with
-    | OC_native nc -> native_unsafe_output_bigarray nc buf ofs len
-    | OC_user_defined r ->
-      (* No direct C path for user-defined channels; copy via a bytes buffer. *)
-      if not r.closed then begin
-        let tmp = bytes_create len in
-        for i = 0 to len - 1 do
-          bytes_unsafe_set tmp i
-            (unsafe_char_of_int (Bigarray.Array1.unsafe_get buf (ofs + i)))
-        done;
-        let pos = ref 0 in
-        while !pos < len do
-          let n = r.ops.out_write r.st tmp !pos (len - !pos) in
-          pos := !pos + n
-        done
-      end
+    | OC_native nc -> Some nc
+    | OC_user_defined _ -> None
 end
 
 let make_in_channel st ops =

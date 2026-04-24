@@ -63,7 +63,17 @@ let output_substring = Stdlib.output_substring
 let output_bigarray oc buf ofs len =
   if ofs < 0 || len < 0 || ofs > Bigarray.Array1.dim buf - len
   then invalid_arg "output_bigarray"
-  else Stdlib.CamlinternalChannel.unsafe_output_bigarray oc buf ofs len
+  else
+    match Stdlib.CamlinternalChannel.native_out_channel_of oc with
+    | Some nc ->
+      Stdlib.CamlinternalChannel.unsafe_output_bigarray_native nc buf ofs len
+    | None ->
+      (* User-defined channel: copy via an intermediate bytes buffer. *)
+      let tmp = Bytes.create len in
+      for i = 0 to len - 1 do
+        Bytes.unsafe_set tmp i (Bigarray.Array1.get buf (ofs + i))
+      done;
+      Stdlib.output oc tmp 0 len
 
 let set_binary_mode = Stdlib.set_binary_mode_out
 
