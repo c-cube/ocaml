@@ -838,10 +838,15 @@ CAMLprim value caml_ml_is_binary_mode(value vchannel)
 CAMLprim value caml_ml_flush(value vchannel)
 {
   CAMLparam1 (vchannel);
-  /* During bootstrap, flush_all may call us with an OC_native(nc) variant
-     block (tag 0) instead of a raw native channel (custom block).
-     Unwrap it so we can call Channel() safely. */
-  if (Tag_val(vchannel) == 0) vchannel = Field(vchannel, 0);
+  /* Bootstrap compat: boot/ocamlc may call us with an OC_native(nc) block
+     (tag 0) instead of a raw native_out_channel custom block (tag 255).
+     Unwrap it. If it's OC_user_defined (tag 1), there is no C-side channel
+     to flush — skip. */
+  if (Tag_val(vchannel) == 0) {
+    vchannel = Field(vchannel, 0);
+  } else if (Tag_val(vchannel) != Custom_tag) {
+    CAMLreturn (Val_unit);
+  }
   struct channel * channel = Channel(vchannel);
 
   caml_channel_lock(channel);
