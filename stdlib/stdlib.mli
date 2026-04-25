@@ -815,9 +815,14 @@ module CamlinternalChannel : sig
   val in_channel_fd : in_channel -> int
   val out_channel_fd : out_channel -> int
   val out_channel_terminfo_rows : out_channel -> int
+  type native_in_channel
   type native_out_channel
+  val native_in_channel_of : in_channel -> native_in_channel option
   val native_out_channel_of : out_channel -> native_out_channel option
+  val wrap_native_in_channel : native_in_channel -> in_channel
+  val wrap_native_out_channel : native_out_channel -> out_channel
   val unsafe_output_bigarray_native : native_out_channel -> 'a -> int -> int -> unit
+  val unsafe_input_bigarray_native : native_in_channel -> 'a -> int -> int -> int
 end
 
 (** {2 Extensible channels} *)

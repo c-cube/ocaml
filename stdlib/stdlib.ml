@@ -343,8 +343,6 @@ external native_open_descriptor_out : int -> native_out_channel
   = "caml_ml_open_descriptor_out"
 external native_flush               : native_out_channel -> unit
   = "caml_ml_flush"
-external native_out_channels_list   : unit -> native_out_channel list
-  = "caml_ml_out_channels_list"
 external native_unsafe_output       : native_out_channel -> bytes -> int -> int -> unit
   = "caml_ml_output_bytes"
 external native_unsafe_output_bigarray : native_out_channel -> 'a -> int -> int -> unit
@@ -375,6 +373,8 @@ external native_input_char          : native_in_channel -> char
   = "caml_ml_input_char"
 external native_unsafe_input        : native_in_channel -> bytes -> int -> int -> int
   = "caml_ml_input"
+external native_unsafe_input_bigarray : native_in_channel -> 'a -> int -> int -> int
+  = "caml_ml_input_bigarray"
 external native_input_scan_line     : native_in_channel -> int
   = "caml_ml_input_scan_line"
 external native_input_value         : native_in_channel -> 'a
@@ -509,15 +509,27 @@ module CamlinternalChannel = struct
     | OC_native nc -> native_terminfo_rows nc
     | OC_user_defined _ -> -1
 
+  type nonrec native_in_channel = native_in_channel
   type nonrec native_out_channel = native_out_channel
 
   let unsafe_output_bigarray_native nc buf ofs len =
     native_unsafe_output_bigarray nc buf ofs len
 
+  let unsafe_input_bigarray_native nc buf ofs len =
+    native_unsafe_input_bigarray nc buf ofs len
+
+  let native_in_channel_of (ic : in_channel) =
+    match ic with
+    | IC_native nc -> Some nc
+    | IC_user_defined _ -> None
+
   let native_out_channel_of (oc : out_channel) =
     match oc with
     | OC_native nc -> Some nc
     | OC_user_defined _ -> None
+
+  let wrap_native_in_channel nc = IC_native nc
+  let wrap_native_out_channel nc = OC_native nc
 end
 
 let make_in_channel st ops =
@@ -545,14 +557,17 @@ let flush (oc : out_channel) =
       r.ops.out_flush r.st
     end
 
+external out_channels_list : unit -> out_channel list
+  = "caml_ml_out_channels_list"
+
 let flush_all () =
   let rec iter = function
     | [] -> ()
-    | nc :: l ->
-      (try native_flush nc with Sys_error _ -> ());
+    | oc :: l ->
+      (try flush oc with Sys_error _ -> ());
       iter l
   in
-  iter (native_out_channels_list ())
+  iter (out_channels_list ())
 
 let output_char (oc : out_channel) (c : char) =
   match oc with

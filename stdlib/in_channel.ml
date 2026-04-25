@@ -68,9 +68,21 @@ let input_line ic =
 
 let input = Stdlib.input
 
-external unsafe_input_bigarray :
-  t -> _ Bigarray.Array1.t -> int -> int -> int
-  = "caml_ml_input_bigarray"
+let unsafe_input_bigarray ic
+  (buf:(char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t) ofs len =
+  match Stdlib.CamlinternalChannel.native_in_channel_of ic with
+  | Some nc ->
+    Stdlib.CamlinternalChannel.unsafe_input_bigarray_native nc buf ofs len
+  | None ->
+    (* User-defined channel: copy via an intermediate bytes buffer.
+       Cast the bigarray to char element type since int8_unsigned_elt is
+       1 byte regardless of whether element type is char or int. *)
+    let tmp = Bytes.create len in
+    let r = Stdlib.input ic tmp 0 len in
+    for i = 0 to r - 1 do
+      Bigarray.Array1.unsafe_set buf (ofs + i) (Bytes.unsafe_get tmp i)
+    done;
+    r
 
 let input_bigarray ic buf ofs len =
   if ofs < 0 || len < 0 || ofs > Bigarray.Array1.dim buf - len
@@ -204,6 +216,6 @@ let rec fold_lines f accu ic =
 
 let set_binary_mode = Stdlib.set_binary_mode_in
 
-external is_binary_mode : in_channel -> bool = "caml_ml_is_binary_mode"
+let is_binary_mode = Stdlib.in_channel_is_binary_mode
 
-external isatty : t -> bool = "caml_sys_isatty"
+let isatty = Stdlib.in_channel_isatty

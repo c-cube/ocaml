@@ -706,6 +706,9 @@ CAMLprim value caml_ml_out_channels_list (value unit)
   cl_tmp = NULL;
   for (mlsize_t i = 0; i < num_channels; i++) {
     chan = caml_alloc_channel (channel_list->channel);
+    /* Wrap native channel in OC_native variant (tag 0) so the returned list
+       contains proper out_channel values rather than raw native channels. */
+    chan = caml_alloc_1(0, chan);
     tail = res;
     res = caml_alloc_2(Tag_cons, chan, tail);
     cl_tmp = channel_list;
@@ -835,6 +838,10 @@ CAMLprim value caml_ml_is_binary_mode(value vchannel)
 CAMLprim value caml_ml_flush(value vchannel)
 {
   CAMLparam1 (vchannel);
+  /* During bootstrap, flush_all may call us with an OC_native(nc) variant
+     block (tag 0) instead of a raw native channel (custom block).
+     Unwrap it so we can call Channel() safely. */
+  if (Tag_val(vchannel) == 0) vchannel = Field(vchannel, 0);
   struct channel * channel = Channel(vchannel);
 
   caml_channel_lock(channel);
