@@ -110,12 +110,12 @@ let map_char f oc =
       len);
     out_flush = Stdlib.flush;
     out_close = Stdlib.close_out_noerr;
-    out_seek = None;
-    out_pos = None;
-    out_length = None;
-    out_set_binary = None;
-    out_isatty = None;
-    out_is_binary = None;
-    out_get_fd = None;
+    out_seek = Some Stdlib.LargeFile.seek_out;
+    out_pos = Some Stdlib.LargeFile.pos_out;
+    out_length = Some Stdlib.LargeFile.out_channel_length;
+    out_set_binary = Some Stdlib.set_binary_mode_out;
+    out_isatty = Some Stdlib.out_channel_isatty;
+    out_is_binary = Some Stdlib.out_channel_is_binary_mode;
+    out_get_fd = Some Stdlib.CamlinternalChannel.out_channel_fd;
   } in
   Stdlib.make_out_channel oc ops

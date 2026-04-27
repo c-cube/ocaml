@@ -220,38 +220,45 @@ let is_binary_mode = Stdlib.in_channel_is_binary_mode
 
 let isatty = Stdlib.in_channel_isatty
 
+type str_channel = {
+  str: string;
+  mutable pos: int;
+  mutable len: int;
+  initial_len: int;
+}
+
 let of_string ?(off=0) ?len:initial_len str =
-  let pos = ref off in
-
-  let initial_len = match initial_len with
-    | Some len ->
-        if !pos + len > String.length str then invalid_arg "In_channel.of_string";
-        len
-    | None -> String.length str - off
-  in
-  let len = ref initial_len in
-
-  let ops : int ref Stdlib.in_ops = {
-    in_read = (fun pos buf ->
-      if !len = 0 then buf.Stdlib.len <- 0
+  let ops : str_channel Stdlib.in_ops = {
+    in_read = (fun st buf ->
+      if st.len = 0 then buf.Stdlib.len <- 0
       else begin
-        let n = Int.min !len (Bytes.length buf.Stdlib.buf) in
-        Bytes.blit_string str !pos buf.Stdlib.buf 0 n;
+        let n = Int.min st.len (Bytes.length buf.Stdlib.buf) in
+        Bytes.blit_string st.str st.pos buf.Stdlib.buf 0 n;
         buf.Stdlib.off <- 0;
         buf.Stdlib.len <- n;
-        pos := !pos + n;
-        len := !len - n;
+        st.pos <- st.pos + n;
+        st.len <- st.len - n;
       end);
     in_close = (fun _ -> ());
-    in_pos = Some (fun pos -> Int64.of_int !pos);
-    in_length = Some (fun _ -> Int64.of_int initial_len);
-    in_seek = Some (fun pos p -> pos := Int64.to_int p);
+    in_pos = Some (fun st -> Int64.of_int st.pos);
+    in_length = Some (fun st -> Int64.of_int st.initial_len);
+    in_seek = Some (fun st p ->
+      if Int64.to_int p > st.initial_len then invalid_arg "In_channel.of_string.seek";
+      st.pos <- Int64.to_int p);
     in_set_binary = None;
     in_isatty = None;
     in_is_binary = None;
     in_get_fd = None;
   } in
-  Stdlib.make_in_channel pos ops
+
+  let initial_len = match initial_len with
+    | Some len ->
+        if off + len > String.length str then invalid_arg "In_channel.of_string";
+        len
+    | None -> String.length str - off
+  in
+  let st = { str; pos=off; len=initial_len; initial_len } in
+  Stdlib.make_in_channel st ops
 
 let map_char f ic =
   let ops : in_channel Stdlib.in_ops = {
@@ -266,13 +273,13 @@ let map_char f ic =
         buf.Stdlib.off <- 0;
         buf.Stdlib.len <- n
       end);
-    in_close = Stdlib.close_in_noerr;
-    in_seek = None;
-    in_pos = None;
-    in_length = None;
-    in_set_binary = None;
-    in_isatty = None;
-    in_is_binary = None;
-    in_get_fd = None;
+    in_close = (fun ic -> Stdlib.close_in ic);
+    in_seek = Some Stdlib.LargeFile.seek_in;
+    in_pos = Some Stdlib.LargeFile.pos_in;
+    in_length = Some Stdlib.LargeFile.in_channel_length;
+    in_set_binary = Some Stdlib.set_binary_mode_in;
+    in_isatty = Some Stdlib.in_channel_isatty;
+    in_is_binary = Some Stdlib.in_channel_is_binary_mode;
+    in_get_fd = Some Stdlib.CamlinternalChannel.in_channel_fd;
   } in
   Stdlib.make_in_channel ic ops
