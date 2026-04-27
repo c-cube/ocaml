@@ -863,11 +863,6 @@ type 'st out_ops = {
     (** Is the output in binary mode? Optional *)
   out_get_fd: ('st -> int) option;
     (** Get underlying Unix FD, if any. *)
-  out_set_buffered: 'st -> bool -> unit;
-    (** Control underlying buffering. Can be
-        ignored. *)
-  out_is_buffered: 'st -> bool;
-    (** Return whether the output is buffered. *)
 }
 (** Operations for a user-defined output channel.
     @since 5.6 *)

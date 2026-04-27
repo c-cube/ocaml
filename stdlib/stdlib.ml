@@ -441,8 +441,6 @@ type 'st out_ops = {
   out_isatty: ('st -> bool) option;
   out_is_binary: ('st -> bool) option;
   out_get_fd: ('st -> int) option;
-  out_set_buffered: 'st -> bool -> unit;
-  out_is_buffered: 'st -> bool;
 }
 
 type 'st in_ops = {
@@ -578,7 +576,7 @@ let output_char (oc : out_channel) (c : char) =
     if r.buf.off + r.buf.len >= cap then flush_buf_ud r.st r.ops r.buf;
     bytes_unsafe_set r.buf.buf (r.buf.off + r.buf.len) c;
     r.buf.len <- r.buf.len + 1;
-    if r.buf.off + r.buf.len >= cap || not (r.ops.out_is_buffered r.st)
+    if r.buf.off + r.buf.len >= cap
     then flush_buf_ud r.st r.ops r.buf
 
 let output_byte oc n = output_char oc (unsafe_char_of_int (n land 0xFF))
@@ -601,7 +599,7 @@ let output (oc : out_channel) (s : bytes) (ofs : int) (len : int) =
       i := !i + n;
       remaining := !remaining - n
     done;
-    if r.buf.off + r.buf.len >= cap || not (r.ops.out_is_buffered r.st)
+    if r.buf.off + r.buf.len >= cap
     then flush_buf_ud r.st r.ops r.buf
 
 let output_substring (oc : out_channel) (s : string) (ofs : int) (len : int) =
@@ -694,13 +692,13 @@ let set_buffered_out (oc : out_channel) (b : bool) =
   | OC_native nc -> native_set_buffered_out nc b
   | OC_user_defined r ->
     if r.closed then raise (Sys_error "set_buffered: channel is closed");
-    if not b then flush_buf_ud r.st r.ops r.buf;
-    r.ops.out_set_buffered r.st b
+    if not b then
+      invalid_arg "set_buffered: user-defined channels are always buffered"
 
 let is_buffered_out (oc : out_channel) : bool =
   match oc with
   | OC_native nc -> native_is_buffered_out nc
-  | OC_user_defined r -> r.ops.out_is_buffered r.st
+  | OC_user_defined _ -> true
 
 (* ---- open_out ---- *)
 
