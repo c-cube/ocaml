@@ -167,7 +167,7 @@ let input_all ic =
   let initial_size =
     try
       Stdlib.in_channel_length ic - Stdlib.pos_in ic
-    with Sys_error _ ->
+    with Sys_error _ | Invalid_argument _ ->
       -1
   in
   let initial_size = if initial_size < 0 then chunk_size else initial_size in
@@ -219,3 +219,60 @@ let set_binary_mode = Stdlib.set_binary_mode_in
 let is_binary_mode = Stdlib.in_channel_is_binary_mode
 
 let isatty = Stdlib.in_channel_isatty
+
+let of_string ?(off=0) ?len:initial_len str =
+  let pos = ref off in
+
+  let initial_len = match initial_len with
+    | Some len ->
+        if !pos + len > String.length str then invalid_arg "In_channel.of_string";
+        len
+    | None -> String.length str - off
+  in
+  let len = ref initial_len in
+
+  let ops : int ref Stdlib.in_ops = {
+    in_read = (fun pos buf ->
+      if !len = 0 then buf.Stdlib.len <- 0
+      else begin
+        let n = Int.min !len (Bytes.length buf.Stdlib.buf) in
+        Bytes.blit_string str !pos buf.Stdlib.buf 0 n;
+        buf.Stdlib.off <- 0;
+        buf.Stdlib.len <- n;
+        pos := !pos + n;
+        len := !len - n;
+      end);
+    in_close = (fun _ -> ());
+    in_pos = Some (fun pos -> Int64.of_int !pos);
+    in_length = Some (fun _ -> Int64.of_int initial_len);
+    in_seek = Some (fun pos p -> pos := Int64.to_int p);
+    in_set_binary = None;
+    in_isatty = None;
+    in_is_binary = None;
+    in_get_fd = None;
+  } in
+  Stdlib.make_in_channel pos ops
+
+let map_char f ic =
+  let ops : in_channel Stdlib.in_ops = {
+    in_read = (fun ic buf ->
+      let n = Stdlib.input ic buf.Stdlib.buf 0 (Bytes.length buf.Stdlib.buf) in
+      if n = 0 then buf.Stdlib.len <- 0
+      else begin
+        for i = 0 to n - 1 do
+          Bytes.unsafe_set buf.Stdlib.buf i
+            (f (Bytes.unsafe_get buf.Stdlib.buf i))
+        done;
+        buf.Stdlib.off <- 0;
+        buf.Stdlib.len <- n
+      end);
+    in_close = Stdlib.close_in_noerr;
+    in_seek = None;
+    in_pos = None;
+    in_length = None;
+    in_set_binary = None;
+    in_isatty = None;
+    in_is_binary = None;
+    in_get_fd = None;
+  } in
+  Stdlib.make_in_channel ic ops

@@ -222,6 +222,18 @@ val isatty : t -> bool
 
     @since 5.1 *)
 
+val of_string : ?off:int -> ?len:int -> string -> t
+(** [of_string s] creates an input channel that reads from the string [s].
+    @param off initial offset in [s]
+    @param len number of bytes in [s]
+    @since 5.6 *)
+
+val map_char : (char -> char) -> t -> t
+(** [map_char f ic] creates an input channel that reads from [ic] and
+    applies [f] to every character. Closing the resulting channel also
+    closes [ic].
+    @since 5.6 *)
+
 (** {1:examples Examples}
     Reading the contents of a file:
     {[
