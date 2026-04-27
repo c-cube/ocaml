@@ -195,6 +195,16 @@ val isatty : t -> bool
 
     @since 5.1 *)
 
+val of_buf : Buffer.t -> t
+(** [of_buf b] creates an output channel that appends to buffer [b].
+    @since 5.6 *)
+
+val map_char : (char -> char) -> t -> t
+(** [map_char f oc] creates an output channel that applies [f] to every
+    character before writing it to [oc]. Closing the resulting channel also
+    flushes and closes [oc].
+    @since 5.6 *)
+
 (** {1:examples Examples}
     Printing to the terminal:
     {[

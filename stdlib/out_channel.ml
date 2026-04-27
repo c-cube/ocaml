@@ -84,3 +84,38 @@ let set_buffered = Stdlib.set_buffered_out
 let is_buffered = Stdlib.is_buffered_out
 
 let isatty = Stdlib.out_channel_isatty
+
+let of_buf b =
+  let ops : Buffer.t Stdlib.out_ops = {
+    out_write = (fun b bytes ofs len ->
+      Buffer.add_subbytes b bytes ofs len; len);
+    out_flush = (fun _ -> ());
+    out_close = (fun _ -> ());
+    out_seek = None;
+    out_pos = Some (fun b -> Int64.of_int (Buffer.length b));
+    out_length = None;
+    out_set_binary = None;
+    out_isatty = None;
+    out_is_binary = None;
+    out_get_fd = None;
+  } in
+  Stdlib.make_out_channel b ops
+
+let map_char f oc =
+  let ops : out_channel Stdlib.out_ops = {
+    out_write = (fun oc bytes ofs len ->
+      let mapped = Bytes.init len (fun i ->
+        f (Bytes.unsafe_get bytes (ofs + i))) in
+      Stdlib.output oc mapped 0 len;
+      len);
+    out_flush = Stdlib.flush;
+    out_close = Stdlib.close_out_noerr;
+    out_seek = None;
+    out_pos = None;
+    out_length = None;
+    out_set_binary = None;
+    out_isatty = None;
+    out_is_binary = None;
+    out_get_fd = None;
+  } in
+  Stdlib.make_out_channel oc ops
