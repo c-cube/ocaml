@@ -473,8 +473,6 @@ type in_channel =
       mutable closed: bool;
     } -> in_channel
 
-(* ---- Standard channels ---- *)
-
 let stdin  = IC_native (native_open_descriptor_in  0)
 let stdout = OC_native (native_open_descriptor_out 1)
 let stderr = OC_native (native_open_descriptor_out 2)
@@ -532,8 +530,6 @@ let make_in_channel st ops =
 
 let make_out_channel st ops =
   OC_user_defined { st; ops; buf = make_chan_buffer (); closed = false }
-
-(* ==== Output functions ==== *)
 
 let flush_buf_ud st ops (buf : chan_buffer) =
   while buf.len > 0 do
@@ -700,8 +696,6 @@ let is_buffered_out (oc : out_channel) : bool =
   | OC_native nc -> native_is_buffered_out nc
   | OC_user_defined _ -> true
 
-(* ---- open_out ---- *)
-
 let open_out_gen mode perm name =
   let nc = native_open_descriptor_out (open_desc name mode perm) in
   native_set_out_name nc name;
@@ -713,7 +707,7 @@ let open_out name =
 let open_out_bin name =
   open_out_gen [Open_wronly; Open_creat; Open_trunc; Open_binary] 0o666 name
 
-(* ==== Input functions ==== *)
+(* Input functions *)
 
 let input_char (ic : in_channel) =
   match ic with
@@ -844,41 +838,45 @@ let native_input_line nc =
   in
   bytes_unsafe_to_string (scan [] 0)
 
+let user_input_line st ops buf =
+  let rec collect chunks total_len =
+    if buf.len = 0 then begin
+      ops.in_read st buf;
+      if buf.len = 0 then begin
+        if total_len = 0 then raise End_of_file
+        else concat_chunks_rev chunks total_len
+      end else
+        collect chunks total_len
+    end else
+      let nl = scan_newline buf in
+      if nl >= 0 then begin
+        let chunk = consume_buf buf nl in
+        buf.off <- buf.off + 1;
+        buf.len <- buf.len - 1;
+        concat_chunks_rev (chunk :: chunks) (total_len + nl)
+      end else begin
+        let chunk = consume_buf buf buf.len in
+        ops.in_read st buf;
+        collect (chunk :: chunks) (total_len + bytes_length chunk)
+      end
+  in
+
+  let nl = scan_newline buf in
+  if nl >= 0 then begin
+    let line = consume_buf buf nl in
+    buf.off <- buf.off + 1; (* skip '\n' *)
+    buf.len <- buf.len - 1;
+    bytes_unsafe_to_string line
+  end else begin
+    collect [] 0
+  end
+
 let input_line (ic : in_channel) =
   match ic with
   | IC_native nc -> native_input_line nc
   | IC_user_defined r ->
     if r.closed then raise (Sys_error "input_line: channel is closed");
-    let nl = scan_newline r.buf in
-    if nl >= 0 then begin
-      let line = consume_buf r.buf nl in
-      r.buf.off <- r.buf.off + 1; (* skip '\n' *)
-      r.buf.len <- r.buf.len - 1;
-      bytes_unsafe_to_string line
-    end else begin
-      let rec collect chunks total_len =
-        if r.buf.len = 0 then begin
-          r.ops.in_read r.st r.buf;
-          if r.buf.len = 0 then begin
-            if total_len = 0 then raise End_of_file
-            else concat_chunks_rev chunks total_len
-          end else
-            collect chunks total_len
-        end else
-          let nl = scan_newline r.buf in
-          if nl >= 0 then begin
-            let chunk = consume_buf r.buf nl in
-            r.buf.off <- r.buf.off + 1;
-            r.buf.len <- r.buf.len - 1;
-            concat_chunks_rev (chunk :: chunks) (total_len + nl)
-          end else begin
-            let chunk = consume_buf r.buf r.buf.len in
-            r.ops.in_read r.st r.buf;
-            collect (chunk :: chunks) (total_len + bytes_length chunk)
-          end
-      in
-      collect [] 0
-    end
+    user_input_line r.st r.ops r.buf
 
 let input_binary_int ic =
   let b0 = input_byte ic in
@@ -964,8 +962,6 @@ let in_channel_is_binary_mode (ic : in_channel) =
   | IC_native nc -> native_is_binary_mode_in nc
   | IC_user_defined r ->
     (match r.ops.in_is_binary with None -> false | Some f -> f r.st)
-
-(* ---- open_in ---- *)
 
 let open_in_gen mode perm name =
   let nc = native_open_descriptor_in (open_desc name mode perm) in
