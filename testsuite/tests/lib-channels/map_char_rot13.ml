@@ -20,7 +20,7 @@ let rot13 c =
 
 let () =
   let buf = Buffer.create 256 in
-  let oc = Out_channel.map_char rot13 (Out_channel.of_buf buf) in
+  let oc = Out_channel.map_char rot13 (Out_channel.of_buffer buf) in
   Out_channel.output_string oc text;
   Out_channel.close oc;
   (* Read back through a rot13 in_channel (rot13 is involutive) *)

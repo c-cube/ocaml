@@ -195,7 +195,7 @@ val isatty : t -> bool
 
     @since 5.1 *)
 
-val of_buf : Buffer.t -> t
+val of_buffer : Buffer.t -> t
 (** [of_buf b] creates an output channel that appends to buffer [b].
     @since 5.6 *)
 

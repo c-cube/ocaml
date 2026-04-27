@@ -85,7 +85,7 @@ let is_buffered = Stdlib.is_buffered_out
 
 let isatty = Stdlib.out_channel_isatty
 
-let of_buf b =
+let of_buffer b =
   let ops : Buffer.t Stdlib.out_ops = {
     out_write = (fun b bytes ofs len ->
       Buffer.add_subbytes b bytes ofs len; len);
