@@ -283,3 +283,27 @@ let map_char f ic =
     in_get_fd = Some Stdlib.CamlinternalChannel.in_channel_fd;
   } in
   Stdlib.make_in_channel ic ops
+
+let make
+    ~read
+    ~close
+    ?seek
+    ?pos
+    ?length
+    ?set_binary
+    ?isatty
+    ?is_binary
+    ?get_fd
+    st =
+  let ops : 'st Stdlib.in_ops = {
+    in_read = read;
+    in_close = close;
+    in_seek = seek;
+    in_pos = pos;
+    in_length = length;
+    in_set_binary = set_binary;
+    in_isatty = isatty;
+    in_is_binary = is_binary;
+    in_get_fd = get_fd;
+  } in
+  Stdlib.make_in_channel st ops

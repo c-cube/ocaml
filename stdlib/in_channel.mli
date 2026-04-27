@@ -234,6 +234,35 @@ val map_char : (char -> char) -> t -> t
     closes [ic].
     @since 5.6 *)
 
+val make :
+  read:('st -> Stdlib.chan_buffer -> unit) ->
+  close:('st -> unit) ->
+  ?seek:('st -> int64 -> unit) ->
+  ?pos:('st -> int64) ->
+  ?length:('st -> int64) ->
+  ?set_binary:('st -> bool -> unit) ->
+  ?isatty:('st -> bool) ->
+  ?is_binary:('st -> bool) ->
+  ?get_fd:('st -> int) ->
+  'st -> t
+(** [make ~read ~close st] creates a user-defined input channel backed by
+    state [st]. [read] fills a {!Stdlib.chan_buffer} with input data;
+    setting [chan_buffer.len] to [0] signals end-of-file. [close]
+    releases any resources associated with [st].
+
+    The optional arguments correspond to optional channel operations:
+    {ul
+    {- [~seek]: seek to an absolute offset in the input.}
+    {- [~pos]: return the current absolute offset.}
+    {- [~length]: return the total length of the input.}
+    {- [~set_binary]: switch between binary and text mode; if provided,
+       [~is_binary] should also be provided.}
+    {- [~isatty]: return [true] if the input is a terminal.}
+    {- [~is_binary]: return whether the channel is in binary mode.}
+    {- [~get_fd]: return the underlying Unix file descriptor.}}
+
+    @since 5.6 *)
+
 (** {1:examples Examples}
     Reading the contents of a file:
     {[

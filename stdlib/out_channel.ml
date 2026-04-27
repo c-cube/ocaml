@@ -119,3 +119,29 @@ let map_char f oc =
     out_get_fd = Some Stdlib.CamlinternalChannel.out_channel_fd;
   } in
   Stdlib.make_out_channel oc ops
+
+let make
+    ~write
+    ~flush
+    ~close
+    ?seek
+    ?pos
+    ?length
+    ?set_binary
+    ?isatty
+    ?is_binary
+    ?get_fd
+    st =
+  let ops : 'st Stdlib.out_ops = {
+    out_write = write;
+    out_flush = flush;
+    out_close = close;
+    out_seek = seek;
+    out_pos = pos;
+    out_length = length;
+    out_set_binary = set_binary;
+    out_isatty = isatty;
+    out_is_binary = is_binary;
+    out_get_fd = get_fd;
+  } in
+  Stdlib.make_out_channel st ops
