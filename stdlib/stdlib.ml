@@ -305,14 +305,6 @@ let[@tail_mod_cons] rec ( @ ) l1 l2 =
 
 (* I/O operations *)
 
-(* ---- Int64 arithmetic primitives (local) ---- *)
-
-external int64_add : int64 -> int64 -> int64 = "%int64_add"
-external int64_sub : int64 -> int64 -> int64 = "%int64_sub"
-external int64_of_int : int -> int64 = "%int64_of_int"
-external int64_to_int : int64 -> int = "%int64_to_int"
-
-(* ---- Low-level I/O externals ---- *)
 
 type open_flag =
     Open_rdonly | Open_wronly | Open_append
@@ -321,100 +313,112 @@ type open_flag =
 
 external open_desc : string -> open_flag list -> int -> int = "caml_sys_open"
 
-(* ---- Marshal primitives (for output_value / input_value) ----
-   Marshal module is not available yet; we use the C primitives directly. *)
 
-external marshal_to_bytes : 'a -> unit list -> bytes
-  = "caml_output_value_to_bytes"
-external marshal_from_bytes_unsafe : bytes -> int -> 'a
-  = "caml_input_value_from_bytes"
-external marshal_data_size_unsafe : bytes -> int -> int
-  = "caml_marshal_data_size"
-let marshal_header_size = 16
-
-(* ---- Native channel C primitives ---- *)
+(* native channels. These correspond to the pre-existing
+   IO channels implemented in C.
+   Now we wrap them in a sum type to allow for user-defined channels. *)
 
 type native_in_channel
 type native_out_channel
 
-external native_open_descriptor_in  : int -> native_in_channel
-  = "caml_ml_open_descriptor_in"
-external native_open_descriptor_out : int -> native_out_channel
-  = "caml_ml_open_descriptor_out"
-external native_flush               : native_out_channel -> unit
-  = "caml_ml_flush"
-external native_unsafe_output       : native_out_channel -> bytes -> int -> int -> unit
-  = "caml_ml_output_bytes"
-external native_unsafe_output_bigarray : native_out_channel -> 'a -> int -> int -> unit
-  = "caml_ml_output_bigarray"
-external native_output_char         : native_out_channel -> char -> unit
-  = "caml_ml_output_char"
-external native_marshal_to_channel  : native_out_channel -> 'a -> unit list -> unit
-  = "caml_output_value"
-external native_seek_out            : native_out_channel -> int -> unit
-  = "caml_ml_seek_out"
-external native_pos_out             : native_out_channel -> int
-  = "caml_ml_pos_out"
-external native_out_channel_length  : native_out_channel -> int
-  = "caml_ml_channel_size"
-external native_close_channel       : native_out_channel -> unit
-  = "caml_ml_close_channel"
-external native_set_binary_mode_out : native_out_channel -> bool -> unit
-  = "caml_ml_set_binary_mode"
-external native_is_binary_mode_out  : native_out_channel -> bool
-  = "caml_ml_is_binary_mode"
-external native_set_buffered_out    : native_out_channel -> bool -> unit
-  = "caml_ml_set_buffered"
-external native_is_buffered_out     : native_out_channel -> bool
-  = "caml_ml_is_buffered"
-external native_set_out_name        : native_out_channel -> string -> unit
-  = "caml_ml_set_channel_name"
-external native_input_char          : native_in_channel -> char
-  = "caml_ml_input_char"
-external native_unsafe_input        : native_in_channel -> bytes -> int -> int -> int
-  = "caml_ml_input"
-external native_unsafe_input_bigarray : native_in_channel -> 'a -> int -> int -> int
-  = "caml_ml_input_bigarray"
-external native_input_scan_line     : native_in_channel -> int
-  = "caml_ml_input_scan_line"
-external native_input_value         : native_in_channel -> 'a
-  = "caml_input_value"
-external native_seek_in             : native_in_channel -> int -> unit
-  = "caml_ml_seek_in"
-external native_pos_in              : native_in_channel -> int
-  = "caml_ml_pos_in"
-external native_in_channel_length   : native_in_channel -> int
-  = "caml_ml_channel_size"
-external native_close_in            : native_in_channel -> unit
-  = "caml_ml_close_channel"
-external native_set_binary_mode_in  : native_in_channel -> bool -> unit
-  = "caml_ml_set_binary_mode"
-external native_is_binary_mode_in   : native_in_channel -> bool
-  = "caml_ml_is_binary_mode"
-external native_set_in_name         : native_in_channel -> string -> unit
-  = "caml_ml_set_channel_name"
-external native_isatty_out          : native_out_channel -> bool
-  = "caml_sys_isatty"
-external native_isatty_in           : native_in_channel -> bool
-  = "caml_sys_isatty"
-external native_terminfo_rows       : native_out_channel -> int
-  = "caml_terminfo_rows"
-external native_channel_descriptor  : 'a -> int
-  = "caml_channel_descriptor"
-external native_seek_out_64         : native_out_channel -> int64 -> unit
-  = "caml_ml_seek_out_64"
-external native_pos_out_64          : native_out_channel -> int64
-  = "caml_ml_pos_out_64"
-external native_out_channel_length_64 : native_out_channel -> int64
-  = "caml_ml_channel_size_64"
-external native_seek_in_64          : native_in_channel -> int64 -> unit
-  = "caml_ml_seek_in_64"
-external native_pos_in_64           : native_in_channel -> int64
-  = "caml_ml_pos_in_64"
-external native_in_channel_length_64 : native_in_channel -> int64
-  = "caml_ml_channel_size_64"
+(* definitions and primitives used to define IO channels *)
+open struct
 
-(* ---- Buffer for user-defined channels ---- *)
+  external int64_add : int64 -> int64 -> int64 = "%int64_add"
+  external int64_sub : int64 -> int64 -> int64 = "%int64_sub"
+  external int64_of_int : int -> int64 = "%int64_of_int"
+  external int64_to_int : int64 -> int = "%int64_to_int"
+
+  external bytes_unsafe_get : bytes -> int -> char = "%bytes_unsafe_get"
+  external bytes_unsafe_set : bytes -> int -> char -> unit = "%bytes_unsafe_set"
+
+  (* Marshal module is not available yet; we use the C primitives directly. *)
+
+  external marshal_to_bytes : 'a -> unit list -> bytes
+    = "caml_output_value_to_bytes"
+  external marshal_from_bytes_unsafe : bytes -> int -> 'a
+    = "caml_input_value_from_bytes"
+  external marshal_data_size_unsafe : bytes -> int -> int
+    = "caml_marshal_data_size"
+  let marshal_header_size = 16
+
+  external native_open_descriptor_in  : int -> native_in_channel
+    = "caml_ml_open_descriptor_in"
+  external native_open_descriptor_out : int -> native_out_channel
+    = "caml_ml_open_descriptor_out"
+  external native_flush               : native_out_channel -> unit
+    = "caml_ml_flush"
+  external native_unsafe_output       : native_out_channel -> bytes -> int -> int -> unit
+    = "caml_ml_output_bytes"
+  external native_unsafe_output_bigarray : native_out_channel -> 'a -> int -> int -> unit
+    = "caml_ml_output_bigarray"
+  external native_output_char         : native_out_channel -> char -> unit
+    = "caml_ml_output_char"
+  external native_marshal_to_channel  : native_out_channel -> 'a -> unit list -> unit
+    = "caml_output_value"
+  external native_seek_out            : native_out_channel -> int -> unit
+    = "caml_ml_seek_out"
+  external native_pos_out             : native_out_channel -> int
+    = "caml_ml_pos_out"
+  external native_out_channel_length  : native_out_channel -> int
+    = "caml_ml_channel_size"
+  external native_close_channel       : native_out_channel -> unit
+    = "caml_ml_close_channel"
+  external native_set_binary_mode_out : native_out_channel -> bool -> unit
+    = "caml_ml_set_binary_mode"
+  external native_is_binary_mode_out  : native_out_channel -> bool
+    = "caml_ml_is_binary_mode"
+  external native_set_buffered_out    : native_out_channel -> bool -> unit
+    = "caml_ml_set_buffered"
+  external native_is_buffered_out     : native_out_channel -> bool
+    = "caml_ml_is_buffered"
+  external native_set_out_name        : native_out_channel -> string -> unit
+    = "caml_ml_set_channel_name"
+  external native_input_char          : native_in_channel -> char
+    = "caml_ml_input_char"
+  external native_unsafe_input        : native_in_channel -> bytes -> int -> int -> int
+    = "caml_ml_input"
+  external native_unsafe_input_bigarray : native_in_channel -> 'a -> int -> int -> int
+    = "caml_ml_input_bigarray"
+  external native_input_scan_line     : native_in_channel -> int
+    = "caml_ml_input_scan_line"
+  external native_input_value         : native_in_channel -> 'a
+    = "caml_input_value"
+  external native_seek_in             : native_in_channel -> int -> unit
+    = "caml_ml_seek_in"
+  external native_pos_in              : native_in_channel -> int
+    = "caml_ml_pos_in"
+  external native_in_channel_length   : native_in_channel -> int
+    = "caml_ml_channel_size"
+  external native_close_in            : native_in_channel -> unit
+    = "caml_ml_close_channel"
+  external native_set_binary_mode_in  : native_in_channel -> bool -> unit
+    = "caml_ml_set_binary_mode"
+  external native_is_binary_mode_in   : native_in_channel -> bool
+    = "caml_ml_is_binary_mode"
+  external native_set_in_name         : native_in_channel -> string -> unit
+    = "caml_ml_set_channel_name"
+  external native_isatty_out          : native_out_channel -> bool
+    = "caml_sys_isatty"
+  external native_isatty_in           : native_in_channel -> bool
+    = "caml_sys_isatty"
+  external native_terminfo_rows       : native_out_channel -> int
+    = "caml_terminfo_rows"
+  external native_channel_descriptor  : 'a -> int
+    = "caml_channel_descriptor"
+  external native_seek_out_64         : native_out_channel -> int64 -> unit
+    = "caml_ml_seek_out_64"
+  external native_pos_out_64          : native_out_channel -> int64
+    = "caml_ml_pos_out_64"
+  external native_out_channel_length_64 : native_out_channel -> int64
+    = "caml_ml_channel_size_64"
+  external native_seek_in_64          : native_in_channel -> int64 -> unit
+    = "caml_ml_seek_in_64"
+  external native_pos_in_64           : native_in_channel -> int64
+    = "caml_ml_pos_in_64"
+  external native_in_channel_length_64 : native_in_channel -> int64
+    = "caml_ml_channel_size_64"
+end
 
 let io_buffer_size = 65536
 
@@ -425,11 +429,6 @@ type chan_buffer = {
 }
 
 let make_chan_buffer () = { buf = bytes_create io_buffer_size; off = 0; len = 0 }
-
-external bytes_unsafe_get : bytes -> int -> char = "%bytes_unsafe_get"
-external bytes_unsafe_set : bytes -> int -> char -> unit = "%bytes_unsafe_set"
-
-(* ---- ops types ---- *)
 
 type 'st out_ops = {
   out_write: 'st -> bytes -> int -> int -> int;
@@ -457,8 +456,6 @@ type 'st in_ops = {
   in_is_binary: ('st -> bool) option;
   in_get_fd: ('st -> int) option;
 }
-
-(* ---- Channel sum types ---- *)
 
 type out_channel =
   | OC_native of native_out_channel
@@ -562,12 +559,15 @@ external out_channels_list : unit -> out_channel list
 
 let flush_all () =
   let rec iter = function
-    | [] -> ()
-    | oc :: l ->
-      (try flush oc with Sys_error _ -> ());
-      iter l
-  in
-  iter (out_channels_list ())
+      [] -> ()
+    | a::l ->
+        begin try
+            flush a
+        with Sys_error _ ->
+          () (* ignore channels closed during a preceding flush. *)
+        end;
+        iter l
+  in iter (out_channels_list ())
 
 let output_char (oc : out_channel) (c : char) =
   match oc with
