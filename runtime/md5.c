@@ -18,6 +18,7 @@
 #include <string.h>
 #include "caml/alloc.h"
 #include "caml/fail.h"
+#include "caml/io.h"
 #include "caml/md5.h"
 #include "caml/memory.h"
 #include "caml/mlvalues.h"
@@ -41,12 +42,42 @@ CAMLprim value caml_md5_bytes(value b, value ofs, value len)
   return caml_md5_string(b, ofs, len);
 }
 
-/* caml_md5_chan: the OCaml binding was removed; this stub keeps the primitive
-   table intact and reports an error if somehow reached. */
-CAMLprim value caml_md5_chan(value vchan, value len)
+/* caml_md5_chan: compute MD5 of a native_in_channel.
+   [vlen] is the number of bytes to read, or a negative value to read until
+   EOF. */
+CAMLprim value caml_md5_chan(value vchan, value vlen)
 {
-  (void)vchan; (void)len;
-  caml_fatal_error("caml_md5_chan is no longer supported");
+  CAMLparam2(vchan, vlen);
+  struct MD5Context ctx;
+  struct channel *chan = Channel(vchan);
+  intnat toread = Long_val(vlen);
+  char buf[4096];
+  int n;
+  value res;
+
+  caml_MD5Init(&ctx);
+  caml_channel_lock(chan);
+  if (toread < 0) {
+    /* Read until EOF */
+    while ((n = caml_getblock(chan, buf, sizeof(buf))) > 0)
+      caml_MD5Update(&ctx, (unsigned char *)buf, n);
+  } else {
+    /* Read exactly toread bytes */
+    while (toread > 0) {
+      intnat req = toread < (intnat)sizeof(buf) ? toread : (intnat)sizeof(buf);
+      n = caml_getblock(chan, buf, req);
+      if (n == 0) {
+        caml_channel_unlock(chan);
+        caml_raise_end_of_file();
+      }
+      caml_MD5Update(&ctx, (unsigned char *)buf, n);
+      toread -= n;
+    }
+  }
+  caml_channel_unlock(chan);
+  res = caml_alloc_string(16);
+  caml_MD5Final(&Byte_u(res, 0), &ctx);
+  CAMLreturn(res);
 }
 
 CAMLexport void caml_md5_block(unsigned char digest[16],

@@ -158,6 +158,8 @@ module MD5 = struct
 
   external unsafe_string: string -> int -> int -> t = "caml_md5_string"
   external unsafe_bytes: bytes -> int -> int -> t = "caml_md5_bytes"
+  external unsafe_native_channel:
+    Stdlib.CamlinternalChannel.native_in_channel -> int -> t = "caml_md5_chan"
 
   let string str =
     unsafe_string str 0 (String.length str)
@@ -176,11 +178,14 @@ module MD5 = struct
     else unsafe_bytes b ofs len
 
   let channel ic toread =
-    let s =
-      if toread < 0 then In_channel.input_all ic
-      else really_input_string ic toread
-    in
-    unsafe_string s 0 (String.length s)
+    match Stdlib.CamlinternalChannel.native_in_channel_of ic with
+    | Some nc -> unsafe_native_channel nc toread
+    | None ->
+      let s =
+        if toread < 0 then In_channel.input_all ic
+        else really_input_string ic toread
+      in
+      unsafe_string s 0 (String.length s)
 
   let file filename =
     In_channel.with_open_bin filename (fun ic -> channel ic (-1))
